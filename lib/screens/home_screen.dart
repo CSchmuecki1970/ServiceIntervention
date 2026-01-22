@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/intervention_provider.dart';
+import '../providers/theme_provider.dart';
 import '../models/service_intervention.dart';
 import 'intervention_detail_screen.dart';
 import 'create_intervention_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,9 +17,76 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Service Interventions'),
         elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Consumer<ThemeProvider>(
+                builder: (context, themeProvider, child) {
+                  return DropdownButton<AppTheme>(
+                    value: themeProvider.currentTheme,
+                    items: AppTheme.values.map((theme) {
+                      return DropdownMenuItem(
+                        value: theme,
+                        child: Text(_getThemeName(theme)),
+                      );
+                    }).toList(),
+                    onChanged: (theme) {
+                      if (theme != null) {
+                        themeProvider.setTheme(theme);
+                      }
+                    },
+                    underline: const SizedBox(),
+                    icon: const Icon(Icons.palette),
+                  );
+                },
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Consumer<InterventionProvider>(
         builder: (context, provider, child) {
+          if (provider.lastError != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 80,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading data',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      provider.lastError ?? 'Unknown error',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           final interventions = provider.interventions;
 
           if (interventions.isEmpty) {
@@ -72,6 +141,27 @@ class HomeScreen extends StatelessWidget {
         label: const Text('New Intervention'),
       ),
     );
+  }
+
+  String _getThemeName(AppTheme theme) {
+    switch (theme) {
+      case AppTheme.light:
+        return 'Light';
+      case AppTheme.dark:
+        return 'Dark';
+      case AppTheme.blue:
+        return 'Blue';
+      case AppTheme.green:
+        return 'Green';
+      case AppTheme.purple:
+        return 'Purple';
+      case AppTheme.orange:
+        return 'Orange';
+      case AppTheme.pink:
+        return 'Pink';
+      case AppTheme.dracula:
+        return 'Dracula';
+    }
   }
 }
 

@@ -88,6 +88,45 @@ class ServiceIntervention extends HiveObject {
   }
 
   bool get isAllTasksCompleted => tasks.every((t) => t.isCompleted);
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'customer': customer.toJson(),
+      'title': title,
+      'description': description,
+      'scheduledDate': scheduledDate.toIso8601String(),
+      'tasks': tasks.map((t) => t.toJson()).toList(),
+      'status': status.name,
+      'createdAt': createdAt.toIso8601String(),
+      'startedAt': startedAt?.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
+      'generalNotes': generalNotes,
+    };
+  }
+
+  factory ServiceIntervention.fromJson(Map<String, dynamic> json) {
+    return ServiceIntervention(
+      id: json['id'] as String,
+      customer: Customer.fromJson(json['customer'] as Map<String, dynamic>),
+      title: json['title'] as String,
+      description: json['description'] as String,
+      scheduledDate: DateTime.parse(json['scheduledDate'] as String),
+      tasks: (json['tasks'] as List<dynamic>)
+          .map((t) => Task.fromJson(t as Map<String, dynamic>))
+          .toList(),
+      status: InterventionStatus.values
+          .firstWhere((e) => e.name == json['status']),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      startedAt: json['startedAt'] != null
+          ? DateTime.parse(json['startedAt'] as String)
+          : null,
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'] as String)
+          : null,
+      generalNotes: json['generalNotes'] as String?,
+    );
+  }
 }
 
 @HiveType(typeId: 3)

@@ -54,4 +54,30 @@ class Task extends HiveObject {
       completedAt: completedAt ?? this.completedAt,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'isCompleted': isCompleted,
+      'order': order,
+      'notes': notes,
+      'completedAt': completedAt?.toIso8601String(),
+    };
+  }
+
+  factory Task.fromJson(Map<String, dynamic> json) {
+    return Task(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String,
+      isCompleted: json['isCompleted'] as bool? ?? false,
+      order: json['order'] as int,
+      notes: json['notes'] as String?,
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'] as String)
+          : null,
+    );
+  }
 }

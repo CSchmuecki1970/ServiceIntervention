@@ -48,4 +48,26 @@ class Customer extends HiveObject {
       notes: notes ?? this.notes,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'address': address,
+      'phone': phone,
+      'email': email,
+      'notes': notes,
+    };
+  }
+
+  factory Customer.fromJson(Map<String, dynamic> json) {
+    return Customer(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      address: json['address'] as String,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+      notes: json['notes'] as String?,
+    );
+  }
 }

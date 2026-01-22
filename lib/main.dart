@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'providers/intervention_provider.dart';
-import 'screens/home_screen.dart';
+import 'providers/theme_provider.dart';
+import 'screens/dashboard_screen.dart';
 import 'services/storage_service.dart';
 
 void main() async {
@@ -17,25 +18,20 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => InterventionProvider(),
-      child: MaterialApp(
-        title: 'Service Intervention Planner',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue,
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-          cardTheme: CardThemeData(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        home: const HomeScreen(),
-        debugShowCheckedModeBanner: false,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => InterventionProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Service Intervention Planner',
+            theme: themeProvider.getThemeData(),
+            home: const DashboardScreen(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }

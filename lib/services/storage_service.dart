@@ -1,47 +1,242 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:convert';
 import '../models/customer.dart';
 import '../models/task.dart';
 import '../models/service_intervention.dart';
 
+class StorageException implements Exception {
+  final String message;
+  StorageException(this.message);
+
+  @override
+  String toString() => 'StorageException: $message';
+}
+
 class StorageService {
   static late Box<ServiceIntervention> interventionsBox;
   static late Box<Customer> customersBox;
+  static DateTime? lastSync;
 
   static Future<void> init() async {
-    Hive.registerAdapter(CustomerAdapter());
-    Hive.registerAdapter(TaskAdapter());
-    Hive.registerAdapter(ServiceInterventionAdapter());
-    Hive.registerAdapter(InterventionStatusAdapter());
+    try {
+      Hive.registerAdapter(CustomerAdapter());
+      Hive.registerAdapter(TaskAdapter());
+      Hive.registerAdapter(ServiceInterventionAdapter());
+      Hive.registerAdapter(InterventionStatusAdapter());
 
-    interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
-    customersBox = await Hive.openBox<Customer>('customers');
+      interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
+      customersBox = await Hive.openBox<Customer>('customers');
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to initialize storage: $e');
+    }
   }
 
+  // Single operations
   static Future<void> saveIntervention(ServiceIntervention intervention) async {
-    await interventionsBox.put(intervention.id, intervention);
+    try {
+      await interventionsBox.put(intervention.id, intervention);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to save intervention: $e');
+    }
   }
 
   static Future<void> deleteIntervention(String id) async {
-    await interventionsBox.delete(id);
+    try {
+      await interventionsBox.delete(id);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to delete intervention: $e');
+    }
   }
 
   static List<ServiceIntervention> getAllInterventions() {
-    return interventionsBox.values.toList();
+    try {
+      return interventionsBox.values.toList();
+    } catch (e) {
+      throw StorageException('Failed to get interventions: $e');
+    }
   }
 
   static ServiceIntervention? getIntervention(String id) {
-    return interventionsBox.get(id);
+    try {
+      return interventionsBox.get(id);
+    } catch (e) {
+      throw StorageException('Failed to get intervention: $e');
+    }
   }
 
   static Future<void> saveCustomer(Customer customer) async {
-    await customersBox.put(customer.id, customer);
+    try {
+      await customersBox.put(customer.id, customer);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to save customer: $e');
+    }
   }
 
   static List<Customer> getAllCustomers() {
-    return customersBox.values.toList();
+    try {
+      return customersBox.values.toList();
+    } catch (e) {
+      throw StorageException('Failed to get customers: $e');
+    }
   }
 
   static Customer? getCustomer(String id) {
-    return customersBox.get(id);
+    try {
+      return customersBox.get(id);
+    } catch (e) {
+      throw StorageException('Failed to get customer: $e');
+    }
+  }
+
+  // Batch operations
+  static Future<void> saveInterventionsBatch(
+    List<ServiceIntervention> interventions,
+  ) async {
+    try {
+      final Map<String, ServiceIntervention> batch = {};
+      for (var intervention in interventions) {
+        batch[intervention.id] = intervention;
+      }
+      await interventionsBox.putAll(batch);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to save batch of interventions: $e');
+    }
+  }
+
+  static Future<void> saveCustomersBatch(List<Customer> customers) async {
+    try {
+      final Map<String, Customer> batch = {};
+      for (var customer in customers) {
+        batch[customer.id] = customer;
+      }
+      await customersBox.putAll(batch);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to save batch of customers: $e');
+    }
+  }
+
+  static Future<void> deleteInterventionsBatch(List<String> ids) async {
+    try {
+      await interventionsBox.deleteAll(ids);
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to delete batch of interventions: $e');
+    }
+  }
+
+  // Clear all data
+  static Future<void> clearAll() async {
+    try {
+      await interventionsBox.clear();
+      await customersBox.clear();
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to clear storage: $e');
+    }
+  }
+
+  // Export to JSON
+  static String exportToJson() {
+    try {
+      final interventions = getAllInterventions();
+      final customers = getAllCustomers();
+
+      final data = {
+        'version': 1,
+        'exportDate': DateTime.now().toIso8601String(),
+        'interventions': interventions.map((i) => i.toJson()).toList(),
+        'customers': customers.map((c) => c.toJson()).toList(),
+      };
+
+      return jsonEncode(data);
+    } catch (e) {
+      throw StorageException('Failed to export data to JSON: $e');
+    }
+  }
+
+  // Import from JSON
+  static Future<void> importFromJson(String jsonString) async {
+    try {
+      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+
+      if (data['version'] != 1) {
+        throw StorageException('Unsupported data version');
+      }
+
+      // Import customers first
+      final customersList = (data['customers'] as List)
+          .map((c) => Customer.fromJson(c as Map<String, dynamic>))
+          .toList();
+      await saveCustomersBatch(customersList);
+
+      // Import interventions
+      final interventionsList = (data['interventions'] as List)
+          .map((i) => ServiceIntervention.fromJson(i as Map<String, dynamic>))
+          .toList();
+      await saveInterventionsBatch(interventionsList);
+
+      lastSync = DateTime.now();
+    } catch (e) {
+      throw StorageException('Failed to import data from JSON: $e');
+    }
+  }
+
+  // Get backup data with metadata
+  static Map<String, dynamic> getBackupMetadata() {
+    try {
+      return {
+        'interventionsCount': interventionsBox.length,
+        'customersCount': customersBox.length,
+        'lastSync': lastSync?.toIso8601String(),
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    } catch (e) {
+      throw StorageException('Failed to get backup metadata: $e');
+    }
+  }
+
+  // Search interventions by customer
+  static List<ServiceIntervention> getInterventionsByCustomer(String customerId) {
+    try {
+      return getAllInterventions()
+          .where((i) => i.customer.id == customerId)
+          .toList();
+    } catch (e) {
+      throw StorageException('Failed to search interventions: $e');
+    }
+  }
+
+  // Get interventions by status
+  static List<ServiceIntervention> getInterventionsByStatus(
+    InterventionStatus status,
+  ) {
+    try {
+      return getAllInterventions().where((i) => i.status == status).toList();
+    } catch (e) {
+      throw StorageException('Failed to filter interventions by status: $e');
+    }
+  }
+
+  // Get interventions in date range
+  static List<ServiceIntervention> getInterventionsInDateRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) {
+    try {
+      return getAllInterventions()
+          .where((i) =>
+              i.scheduledDate.isAfter(startDate) &&
+              i.scheduledDate.isBefore(endDate))
+          .toList();
+    } catch (e) {
+      throw StorageException('Failed to get interventions in date range: $e');
+    }
   }
 }
+
