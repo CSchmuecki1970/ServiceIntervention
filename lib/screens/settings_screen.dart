@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../providers/intervention_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/storage_service.dart';
+import '../services/export_service.dart';
+import 'package:file_selector/file_selector.dart';
 import 'create_intervention_screen.dart';
 import '../utils/currency_utils.dart';
 
@@ -147,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: settingsProvider.defaultCurrencyCode,
+                        initialValue: settingsProvider.defaultCurrencyCode,
                         decoration: const InputDecoration(
                           labelText: 'Currency',
                           border: OutlineInputBorder(),
@@ -379,53 +382,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final provider = context.read<InterventionProvider>();
       final jsonData = provider.exportData();
-
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Export Data'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your data has been exported. Copy it below to save:',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    jsonData,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'Courier',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          content: const Text('Save your data to a JSON file in the documents folder?'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Data copied to clipboard'),
-                  ),
-                );
+              onPressed: () async {
                 Navigator.pop(context);
+                try {
+                  final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+                  final filename = 'service_intervention_export_$timestamp.json';
+                  // Use StorageService.exportToJson() for consistent format
+                  final data = jsonDecode(StorageService.exportToJson());
+                  final path = await ExportService.exportJsonToFile(filename, data);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Exported to $path')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
               },
-              child: const Text('Copy to Clipboard'),
+              child: const Text('Save to File'),
             ),
           ],
         ),
@@ -441,45 +427,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showImportDialog(BuildContext context) {
-    final controller = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Import Data'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Paste your exported JSON data below:',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              minLines: 6,
-              maxLines: 10,
-              decoration: InputDecoration(
-                hintText: 'Paste JSON data here...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ],
-        ),
+        content: const Text('Select a JSON file to import your exported data.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
+              Navigator.pop(context);
               try {
+                final result = await openFile(acceptedTypeGroups: [XTypeGroup(label: 'json', extensions: ['json'])]);
+                if (result == null) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No file selected')));
+                  return;
+                }
+                final text = await result.readAsString();
                 final provider = context.read<InterventionProvider>();
-                await provider.importData(controller.text);
+                await provider.importData(text);
                 if (mounted) {
-                  Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Data imported successfully!', style: TextStyle(color: Colors.white)),
@@ -498,7 +465,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               }
             },
-            child: const Text('Import'),
+            child: const Text('Choose File'),
           ),
         ],
       ),

@@ -103,6 +103,28 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
               itemBuilder: (context, index) {
                 final item = widget.items[index];
                 final isSelected = selectedIndex == index;
+                final theme = Theme.of(context);
+                final primary = theme.primaryColor;
+                final isPrimaryDark = primary.computeLuminance() < 0.5;
+
+                // Choose a selection background that is readable on dark themes
+                final selectedBgColor = isSelected
+                  ? (theme.brightness == Brightness.dark
+                    ? (isPrimaryDark ? Colors.white.withOpacity(0.06) : primary.withOpacity(0.18))
+                    : primary.withOpacity(0.10))
+                  : Colors.transparent;
+
+                final selectedBorderColor = isSelected
+                  ? (theme.brightness == Brightness.dark
+                    ? (isPrimaryDark ? Colors.white70 : primary)
+                    : primary)
+                  : null;
+
+                final selectedContentColor = isSelected
+                  ? (theme.brightness == Brightness.dark
+                    ? (isPrimaryDark ? Colors.white : Colors.black)
+                    : primary)
+                  : (theme.brightness == Brightness.dark ? Colors.white70 : Colors.grey[600]);
 
                 return Padding(
                   padding: EdgeInsets.symmetric(
@@ -127,13 +149,11 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? Theme.of(context).primaryColor.withOpacity(0.1)
-                                : Colors.transparent,
+                            color: selectedBgColor,
                             borderRadius: BorderRadius.circular(8),
                             border: isSelected
                                 ? Border.all(
-                                    color: Theme.of(context).primaryColor,
+                                    color: selectedBorderColor ?? primary,
                                     width: 2,
                                   )
                                 : null,
@@ -142,11 +162,7 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                             children: [
                               Icon(
                                 item.icon,
-                                color: isSelected
-                                    ? Theme.of(context).primaryColor
-                                    : Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.white70
-                                        : Colors.grey[600],
+                                color: selectedContentColor,
                                 size: 24,
                               ),
                               if (isExpanded) ...[
@@ -155,14 +171,10 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                                   child: Text(
                                     item.label,
                                     style: TextStyle(
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
+                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                                       color: isSelected
-                                          ? Theme.of(context).primaryColor
-                                            : Theme.of(context).brightness == Brightness.dark
-                                                ? Colors.white
-                                                : Colors.grey[700],
+                                          ? selectedContentColor
+                                          : (theme.brightness == Brightness.dark ? Colors.white : Colors.grey[700]),
                                     ),
                                   ),
                                 ),
