@@ -100,9 +100,15 @@ class InterventionProvider with ChangeNotifier {
       if (intervention != null) {
         final updatedTasks = intervention.tasks.map((task) {
           if (task.id == taskId) {
+            if (task.isStopped) {
+              return task;
+            }
             return task.copyWith(
               isCompleted: true,
               completedAt: DateTime.now(),
+              isStopped: false,
+              stopReason: null,
+              stoppedAt: null,
             );
           }
           return task;
@@ -121,6 +127,72 @@ class InterventionProvider with ChangeNotifier {
         } else {
           await updateIntervention(updated);
         }
+      }
+    } catch (e) {
+      _lastError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopTask(
+    String interventionId,
+    String taskId,
+    String reason,
+  ) async {
+    try {
+      _lastError = null;
+      final intervention = StorageService.getIntervention(interventionId);
+      if (intervention != null) {
+        final updatedTasks = intervention.tasks.map((task) {
+          if (task.id == taskId) {
+            return task.copyWith(
+              isStopped: true,
+              stopReason: reason,
+              stoppedAt: DateTime.now(),
+              isCompleted: false,
+              completedAt: null,
+            );
+          }
+          return task;
+        }).toList();
+
+        final updated = intervention.copyWith(tasks: updatedTasks);
+
+        if (updated.isAllTasksCompleted &&
+            updated.status != InterventionStatus.completed) {
+          final finalUpdated = updated.copyWith(
+            status: InterventionStatus.completed,
+            completedAt: DateTime.now(),
+          );
+          await updateIntervention(finalUpdated);
+        } else {
+          await updateIntervention(updated);
+        }
+      }
+    } catch (e) {
+      _lastError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateTaskStopReason(
+    String interventionId,
+    String taskId,
+    String reason,
+  ) async {
+    try {
+      _lastError = null;
+      final intervention = StorageService.getIntervention(interventionId);
+      if (intervention != null) {
+        final updatedTasks = intervention.tasks.map((task) {
+          if (task.id == taskId) {
+            return task.copyWith(stopReason: reason);
+          }
+          return task;
+        }).toList();
+
+        final updated = intervention.copyWith(tasks: updatedTasks);
+        await updateIntervention(updated);
       }
     } catch (e) {
       _lastError = e.toString();

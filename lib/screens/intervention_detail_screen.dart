@@ -5,6 +5,8 @@ import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
 import 'roadmap_screen.dart';
 import 'edit_intervention_screen.dart';
+import 'report_preview_screen.dart';
+import '../utils/currency_utils.dart';
 
 class InterventionDetailScreen extends StatelessWidget {
   final String interventionId;
@@ -27,6 +29,20 @@ class InterventionDetailScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(intervention.title),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.preview),
+                tooltip: 'Report Preview',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReportPreviewScreen(
+                        intervention: intervention,
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (intervention.status == InterventionStatus.planned ||
                   intervention.status == InterventionStatus.inProgress)
                 IconButton(
@@ -260,7 +276,7 @@ class _StatusCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${intervention.tasks.where((t) => t.isCompleted).length} of ${intervention.tasks.length} tasks completed',
+                '${intervention.tasks.where((t) => t.isCompleted || t.isStopped).length} of ${intervention.tasks.length} tasks done',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -419,6 +435,13 @@ class _TasksCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...intervention.tasks.map((task) {
+              final isStopped = task.isStopped;
+              final isCompleted = task.isCompleted;
+              final statusColor = isStopped
+                  ? Colors.red
+                  : isCompleted
+                      ? Colors.green
+                      : Colors.grey[300];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -428,38 +451,47 @@ class _TasksCard extends StatelessWidget {
                       height: 24,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: task.isCompleted
-                            ? Colors.green
-                            : Colors.grey[300],
+                        color: statusColor,
                         border: Border.all(
-                          color: task.isCompleted
-                              ? Colors.green
-                              : Colors.grey[400]!,
+                          color: isStopped
+                              ? Colors.red[700]!
+                              : isCompleted
+                                  ? Colors.green
+                                  : Colors.grey[400]!,
                           width: 2,
                         ),
                       ),
-                      child: task.isCompleted
-                          ? const Icon(
-                              Icons.check,
-                              size: 16,
-                              color: Colors.white,
-                            )
-                          : null,
+                      child: isStopped
+                          ? const Icon(Icons.block, size: 16, color: Colors.white)
+                          : isCompleted
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                              : null,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         '${task.order + 1}. ${task.title}',
                         style: TextStyle(
-                          decoration: task.isCompleted
+                          decoration: isCompleted
                               ? TextDecoration.lineThrough
                               : null,
-                          color: task.isCompleted
-                              ? Colors.grey[600]
-                              : null,
+                          color: isStopped
+                              ? Colors.red[700]
+                              : isCompleted
+                                  ? Colors.grey[600]
+                                  : null,
                         ),
                       ),
                     ),
+                    if (isStopped)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Icon(Icons.block, color: Colors.red[700], size: 18),
+                      ),
                   ],
                 ),
               );
@@ -512,6 +544,7 @@ class _TravelInformationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final currencySymbol = CurrencyUtils.symbolFor(intervention.currencyCode);
     
     return Card(
       child: Padding(
@@ -607,7 +640,7 @@ class _TravelInformationCard extends StatelessWidget {
                         intervention.hotelCostSuite != null) ...[
                       const SizedBox(height: 12),
                       Text(
-                        'Costs per Day',
+                        'Costs per Day (${intervention.currencyCode})',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: Colors.grey[700],
@@ -619,17 +652,17 @@ class _TravelInformationCard extends StatelessWidget {
                         children: [
                           if (intervention.hotelCostSingle != null)
                             Text(
-                              'Single: \$${intervention.hotelCostSingle}',
+                              'Single: $currencySymbol${intervention.hotelCostSingle}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           if (intervention.hotelCostDouble != null)
                             Text(
-                              'Double: \$${intervention.hotelCostDouble}',
+                              'Double: $currencySymbol${intervention.hotelCostDouble}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           if (intervention.hotelCostSuite != null)
                             Text(
-                              'Suite: \$${intervention.hotelCostSuite}',
+                              'Suite: $currencySymbol${intervention.hotelCostSuite}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                         ],

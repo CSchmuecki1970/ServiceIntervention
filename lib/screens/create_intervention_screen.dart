@@ -5,6 +5,8 @@ import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
 import '../models/customer.dart';
 import '../models/task.dart';
+import '../utils/currency_utils.dart';
+import '../providers/settings_provider.dart';
 
 class CreateInterventionScreen extends StatefulWidget {
   const CreateInterventionScreen({super.key});
@@ -36,6 +38,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   final _hotelCostSuiteController = TextEditingController();
   final _hotelRatingController = TextEditingController();
   bool _hotelBreakfastIncluded = false;
+  String _currencyCode = 'EUR';
 
   // Schedule
   DateTime _scheduledDate = DateTime.now().add(const Duration(days: 1));
@@ -54,6 +57,14 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settingsProvider = context.read<SettingsProvider>();
+      if (mounted) {
+        setState(() {
+          _currencyCode = settingsProvider.defaultCurrencyCode;
+        });
+      }
+    });
   }
 
   @override
@@ -168,6 +179,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           ? null
           : double.tryParse(_hotelRatingController.text.trim()),
       involvedPersons: _involvedPersons,
+      currencyCode: _currencyCode,
     );
 
     final provider = Provider.of<InterventionProvider>(context, listen: false);
@@ -392,6 +404,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   }
 
   Widget _buildTravelTab() {
+    final currencySymbol = CurrencyUtils.symbolFor(_currencyCode);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -468,6 +481,37 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
         ),
         const SizedBox(height: 24),
         Text(
+          'Currency',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: _currencyCode,
+          decoration: const InputDecoration(
+            labelText: 'Currency',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.currency_exchange),
+          ),
+          items: CurrencyUtils.supportedCurrencies
+              .map(
+                (currency) => DropdownMenuItem(
+                  value: currency.code,
+                  child: Text(CurrencyUtils.labelFor(currency.code)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _currencyCode = value;
+            });
+          },
+        ),
+        const SizedBox(height: 24),
+        Text(
           'Hotel Information',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
@@ -507,10 +551,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostSingleController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Single',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -519,10 +563,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostDoubleController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Double',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -531,10 +575,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostSuiteController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Suite',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),

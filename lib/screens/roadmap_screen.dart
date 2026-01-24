@@ -24,6 +24,7 @@ class RoadmapScreen extends StatefulWidget {
 class _RoadmapScreenState extends State<RoadmapScreen> {
   int _currentTaskIndex = 0;
   final Map<String, TextEditingController> _notesControllers = {};
+  final Map<String, TextEditingController> _stopReasonControllers = {};
   late stt.SpeechToText _speechToText;
   bool _isListening = false;
   String _listeningTaskId = '';
@@ -42,6 +43,9 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     for (var controller in _notesControllers.values) {
       controller.dispose();
     }
+    for (var controller in _stopReasonControllers.values) {
+      controller.dispose();
+    }
     _speechToText.stop();
     super.dispose();
   }
@@ -52,12 +56,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         _notesControllers[task.id] =
             TextEditingController(text: task.notes ?? '');
       }
+      if (!_stopReasonControllers.containsKey(task.id)) {
+        _stopReasonControllers[task.id] =
+            TextEditingController(text: task.stopReason ?? '');
+      }
     }
   }
 
   int _getCurrentTaskIndex(ServiceIntervention intervention) {
     for (int i = 0; i < intervention.tasks.length; i++) {
-      if (!intervention.tasks[i].isCompleted) {
+      if (!intervention.tasks[i].isCompleted &&
+          !intervention.tasks[i].isStopped) {
         return i;
       }
     }
@@ -194,6 +203,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         final currentTask = intervention.tasks[_currentTaskIndex];
         final isLastTask = _currentTaskIndex == intervention.tasks.length - 1;
         final isAllCompleted = intervention.isAllTasksCompleted;
+        final isTaskBlocked = currentTask.isStopped;
 
         return Scaffold(
           appBar: AppBar(
@@ -396,6 +406,14 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                           size: 24,
                                         ),
                                       ],
+                                      if (currentTask.isStopped) ...[
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.block,
+                                          color: Colors.red[700],
+                                          size: 24,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   SizedBox(height: spacing),
@@ -525,6 +543,67 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                           );
                         },
                       ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _stopReasonControllers[currentTask.id],
+                        decoration: InputDecoration(
+                          labelText: 'Stop Reason (if task cannot be completed)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        maxLines: 3,
+                        enabled: !currentTask.isCompleted,
+                        onChanged: (value) {
+                          if (currentTask.isStopped) {
+                            final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                            currentProvider.updateTaskStopReason(
+                              widget.interventionId,
+                              currentTask.id,
+                              value.trim(),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: (currentTask.isCompleted || currentTask.isStopped)
+                              ? null
+                              : () async {
+                                  final reason =
+                                      _stopReasonControllers[currentTask.id]!.text.trim();
+                                  if (reason.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a stop reason first.'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                                  await currentProvider.stopTask(
+                                    widget.interventionId,
+                                    currentTask.id,
+                                    reason,
+                                  );
+                                  if (mounted && !isLastTask) {
+                                    setState(() {
+                                      _currentTaskIndex++;
+                                    });
+                                  }
+                                },
+                          icon: const Icon(Icons.block),
+                          label: const Text('Stop Task'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red[700],
+                            side: BorderSide(color: Colors.red[700]!),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 24),
 
                       // Navigation buttons
@@ -552,7 +631,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                   SizedBox(
                                     width: double.infinity,
                                     child: ElevatedButton.icon(
-                                      onPressed: currentTask.isCompleted
+                                      onPressed: (currentTask.isCompleted || isTaskBlocked)
                                           ? null
                                           : () async {
                                               final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
@@ -602,7 +681,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                   if (_currentTaskIndex > 0) const SizedBox(width: 12),
                                   Expanded(
                                     child: ElevatedButton.icon(
-                                      onPressed: currentTask.isCompleted
+                                      onPressed: (currentTask.isCompleted || isTaskBlocked)
                                           ? null
                                           : () async {
                                               final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
@@ -802,6 +881,7 @@ class _TaskRoadmap extends StatelessWidget {
               final task = entry.value;
               final isCurrent = index == currentIndex;
               final isCompleted = task.isCompleted;
+              final isStopped = task.isStopped;
               final isPast = index < currentIndex;
 
               return Padding(
@@ -814,43 +894,51 @@ class _TaskRoadmap extends StatelessWidget {
                       height: 32,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isCompleted
-                            ? Colors.green
-                            : isCurrent
-                                ? Colors.blue[700]
-                                : Colors.grey[300],
+                        color: isStopped
+                            ? Colors.red[600]
+                            : isCompleted
+                                ? Colors.green
+                                : isCurrent
+                                    ? Colors.blue[700]
+                                    : Colors.grey[300],
                         border: Border.all(
-                          color: isCompleted
-                              ? Colors.green
-                              : isCurrent
-                                  ? Colors.blue[700]!
-                                  : Colors.grey[400]!,
+                          color: isStopped
+                              ? Colors.red[700]!
+                              : isCompleted
+                                  ? Colors.green
+                                  : isCurrent
+                                      ? Colors.blue[700]!
+                                      : Colors.grey[400]!,
                           width: 2,
                         ),
                       ),
-                      child: isCompleted
-                          ? const Icon(Icons.check, size: 18, color: Colors.white)
-                          : isCurrent
-                              ? Center(
-                                  child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : null,
+                      child: isStopped
+                          ? const Icon(Icons.block, size: 18, color: Colors.white)
+                          : isCompleted
+                              ? const Icon(Icons.check, size: 18, color: Colors.white)
+                              : isCurrent
+                                  ? Center(
+                                      child: Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                     ),
                     // Connector line
                     if (index < tasks.length - 1)
                       Container(
                         width: 2,
                         height: 40,
-                        color: isPast || isCompleted
-                            ? Colors.green
-                            : Colors.grey[300],
+                        color: isStopped
+                            ? Colors.red[300]
+                            : isPast || isCompleted
+                                ? Colors.green
+                                : Colors.grey[300],
                         margin: const EdgeInsets.only(left: 15),
                       ),
                     if (index < tasks.length - 1) const SizedBox(width: 15),
@@ -860,12 +948,16 @@ class _TaskRoadmap extends StatelessWidget {
                         '${index + 1}. ${task.title}',
                         style: TextStyle(
                           fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: isCompleted
-                              ? Colors.grey[600]
-                              : isCurrent
-                                  ? Colors.blue[700]
-                                  : Colors.black87,
-                          decoration: isCompleted ? TextDecoration.lineThrough : null,
+                          color: isStopped
+                              ? Colors.red[700]
+                              : isCompleted
+                                  ? Colors.grey[600]
+                                  : isCurrent
+                                      ? Colors.blue[700]
+                                      : Colors.black87,
+                          decoration: isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                     ),

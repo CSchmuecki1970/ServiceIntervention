@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:file_selector/file_selector.dart';
-import 'dart:io';
+import 'package:uuid/uuid.dart';
 import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
+import '../models/task.dart';
+import '../utils/currency_utils.dart';
 
 class EditInterventionScreen extends StatefulWidget {
   final ServiceIntervention intervention;
@@ -23,12 +25,17 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _generalNotesController;
+  late final TextEditingController _customerNameController;
+  late final TextEditingController _customerAddressController;
+  late final TextEditingController _customerPhoneController;
+  late final TextEditingController _customerEmailController;
   late final TextEditingController _hotelNameController;
   late final TextEditingController _hotelAddressController;
   late final TextEditingController _hotelCostSingleController;
   late final TextEditingController _hotelCostDoubleController;
   late final TextEditingController _hotelCostSuiteController;
   late final TextEditingController _hotelRatingController;
+  late String _currencyCode;
   late bool _hotelBreakfastIncluded;
   late DateTime _startDate;
   late DateTime _endDate;
@@ -36,6 +43,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
   late List<String> _involvedPersons;
   late final TextEditingController _involvedPersonController;
   late TabController _tabController;
+  late List<Task> _tasks;
+  final Map<String, TextEditingController> _taskTitleControllers = {};
+  final Map<String, TextEditingController> _taskDescriptionControllers = {};
+  final Map<String, TextEditingController> _taskNotesControllers = {};
+  final Map<String, TextEditingController> _taskStopReasonControllers = {};
 
   @override
   void initState() {
@@ -45,6 +57,14 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
         TextEditingController(text: widget.intervention.description);
     _generalNotesController =
         TextEditingController(text: widget.intervention.generalNotes ?? '');
+    _customerNameController =
+      TextEditingController(text: widget.intervention.customer.name);
+    _customerAddressController =
+      TextEditingController(text: widget.intervention.customer.address);
+    _customerPhoneController = TextEditingController(
+      text: widget.intervention.customer.phone ?? '');
+    _customerEmailController = TextEditingController(
+      text: widget.intervention.customer.email ?? '');
     _hotelNameController =
         TextEditingController(text: widget.intervention.hotelName ?? '');
     _hotelAddressController =
@@ -58,12 +78,23 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
     _hotelRatingController =
         TextEditingController(text: widget.intervention.hotelRating?.toString() ?? '');
     _hotelBreakfastIncluded = widget.intervention.hotelBreakfastIncluded ?? false;
+    _currencyCode = widget.intervention.currencyCode;
     _startDate = widget.intervention.startDate ?? DateTime.now();
     _endDate = widget.intervention.endDate ?? DateTime.now().add(const Duration(days: 1));
     _documents = List.from(widget.intervention.documents);
     _involvedPersons = List.from(widget.intervention.involvedPersons);
     _involvedPersonController = TextEditingController();
-    _tabController = TabController(length: 3, vsync: this);
+    _tasks = List.from(widget.intervention.tasks);
+    for (final task in _tasks) {
+      _taskTitleControllers[task.id] = TextEditingController(text: task.title);
+      _taskDescriptionControllers[task.id] =
+          TextEditingController(text: task.description);
+      _taskNotesControllers[task.id] =
+          TextEditingController(text: task.notes ?? '');
+      _taskStopReasonControllers[task.id] =
+        TextEditingController(text: task.stopReason ?? '');
+    }
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -72,6 +103,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
     _titleController.dispose();
     _descriptionController.dispose();
     _generalNotesController.dispose();
+    _customerNameController.dispose();
+    _customerAddressController.dispose();
+    _customerPhoneController.dispose();
+    _customerEmailController.dispose();
     _hotelNameController.dispose();
     _hotelAddressController.dispose();
     _hotelCostSingleController.dispose();
@@ -79,13 +114,77 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
     _hotelCostSuiteController.dispose();
     _hotelRatingController.dispose();
     _involvedPersonController.dispose();
+    for (final controller in _taskTitleControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _taskDescriptionControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _taskNotesControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _taskStopReasonControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _saveChanges() async {
+    for (final task in _tasks) {
+      final title = _taskTitleControllers[task.id]?.text.trim() ?? '';
+      if (title.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter all task titles')),
+          );
+        }
+        return;
+      }
+      if (task.isStopped) {
+        final reason = _taskStopReasonControllers[task.id]?.text.trim() ?? '';
+        if (reason.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please enter a stop reason for stopped tasks')),
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    final updatedTasks = _tasks.asMap().entries.map((entry) {
+      final index = entry.key;
+      final task = entry.value;
+      final title = _taskTitleControllers[task.id]!.text.trim();
+      final description = _taskDescriptionControllers[task.id]!.text.trim();
+      final notes = _taskNotesControllers[task.id]!.text.trim();
+      final stopReason = _taskStopReasonControllers[task.id]!.text.trim();
+      return task.copyWith(
+        title: title,
+        description: description.isEmpty ? title : description,
+        order: index,
+        notes: notes.isEmpty ? null : notes,
+        stopReason: task.isStopped
+            ? (stopReason.isEmpty ? null : stopReason)
+            : null,
+      );
+    }).toList();
+
     final updated = widget.intervention.copyWith(
+      customer: widget.intervention.customer.copyWith(
+        name: _customerNameController.text.trim(),
+        address: _customerAddressController.text.trim(),
+        phone: _customerPhoneController.text.trim().isEmpty
+            ? null
+            : _customerPhoneController.text.trim(),
+        email: _customerEmailController.text.trim().isEmpty
+            ? null
+            : _customerEmailController.text.trim(),
+      ),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
+      tasks: updatedTasks,
       generalNotes: _generalNotesController.text.trim().isEmpty
           ? null
           : _generalNotesController.text.trim(),
@@ -112,6 +211,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
           : double.tryParse(_hotelRatingController.text.trim()),
       documents: _documents,
       involvedPersons: _involvedPersons,
+      currencyCode: _currencyCode,
     );
 
     final provider = Provider.of<InterventionProvider>(context, listen: false);
@@ -164,8 +264,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
           controller: _tabController,
           tabs: const [
             Tab(text: 'Info & Travel', icon: Icon(Icons.edit)),
+            Tab(text: 'Customer', icon: Icon(Icons.person)),
             Tab(text: 'Notes', icon: Icon(Icons.notes)),
             Tab(text: 'Documents', icon: Icon(Icons.attach_file)),
+            Tab(text: 'Tasks', icon: Icon(Icons.checklist)),
           ],
         ),
       ),
@@ -173,8 +275,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
         controller: _tabController,
         children: [
           _buildInfoTab(),
+          _buildCustomerTab(),
           _buildNotesTab(),
           _buildDocumentsTab(),
+          _buildTasksTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -187,6 +291,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
 
   Widget _buildInfoTab() {
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final currencySymbol = CurrencyUtils.symbolFor(_currencyCode);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -283,6 +388,38 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
           ],
         ),
         const SizedBox(height: 24),
+        // Currency
+        Text(
+          'Currency',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: _currencyCode,
+          decoration: const InputDecoration(
+            labelText: 'Currency',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.currency_exchange),
+          ),
+          items: CurrencyUtils.supportedCurrencies
+              .map(
+                (currency) => DropdownMenuItem(
+                  value: currency.code,
+                  child: Text(CurrencyUtils.labelFor(currency.code)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _currencyCode = value;
+            });
+          },
+        ),
+        const SizedBox(height: 24),
         // Hotel Information
         Text(
           'Hotel Information',
@@ -324,10 +461,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostSingleController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Single',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -336,10 +473,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostDoubleController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Double',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -348,10 +485,10 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
             Expanded(
               child: TextFormField(
                 controller: _hotelCostSuiteController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Suite',
                   border: OutlineInputBorder(),
-                  prefixText: '\$ ',
+                  prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -434,6 +571,52 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
               );
             }).toList(),
           ),
+      ],
+    );
+  }
+
+  Widget _buildCustomerTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextFormField(
+          controller: _customerNameController,
+          decoration: const InputDecoration(
+            labelText: 'Customer Name',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.person),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _customerAddressController,
+          decoration: const InputDecoration(
+            labelText: 'Address',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.location_on),
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _customerPhoneController,
+          decoration: const InputDecoration(
+            labelText: 'Phone (Optional)',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.phone),
+          ),
+          keyboardType: TextInputType.phone,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _customerEmailController,
+          decoration: const InputDecoration(
+            labelText: 'Email (Optional)',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.email),
+          ),
+          keyboardType: TextInputType.emailAddress,
+        ),
       ],
     );
   }
@@ -535,6 +718,204 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                     onPressed: () => _removeDocument(index),
                   ),
                 ),
+              );
+            }),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTasksTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Tasks (${_tasks.length})',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  final newTask = Task(
+                    id: const Uuid().v4(),
+                    title: '',
+                    description: '',
+                    order: _tasks.length,
+                    isCompleted: false,
+                  );
+                  _tasks.add(newTask);
+                  _taskTitleControllers[newTask.id] = TextEditingController();
+                  _taskDescriptionControllers[newTask.id] =
+                      TextEditingController();
+                  _taskNotesControllers[newTask.id] = TextEditingController();
+                  _taskStopReasonControllers[newTask.id] =
+                      TextEditingController();
+                });
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Task'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_tasks.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 48,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No tasks added yet. Click "Add Task" to get started.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Column(
+            children: List.generate(_tasks.length, (index) {
+              final task = _tasks[index];
+              final titleController = _taskTitleControllers[task.id]!;
+              final descriptionController =
+                  _taskDescriptionControllers[task.id]!;
+              final notesController = _taskNotesControllers[task.id]!;
+                final stopReasonController =
+                  _taskStopReasonControllers[task.id]!;
+              return Column(
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Task ${index + 1}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () {
+                                  setState(() {
+                                    _taskTitleControllers[task.id]!.dispose();
+                                    _taskDescriptionControllers[task.id]!
+                                        .dispose();
+                                    _taskNotesControllers[task.id]!.dispose();
+                                    _taskStopReasonControllers[task.id]!
+                                        .dispose();
+                                    _taskTitleControllers.remove(task.id);
+                                    _taskDescriptionControllers.remove(task.id);
+                                    _taskNotesControllers.remove(task.id);
+                                    _taskStopReasonControllers.remove(task.id);
+                                    _tasks.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Completed'),
+                            value: task.isCompleted,
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                _tasks[index] = task.copyWith(
+                                  isCompleted: value,
+                                  completedAt:
+                                      value ? DateTime.now() : null,
+                                  isStopped: value ? false : task.isStopped,
+                                  stopReason: value ? null : task.stopReason,
+                                  stoppedAt: value ? null : task.stoppedAt,
+                                );
+                              });
+                            },
+                          ),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Stopped (Cannot be completed)'),
+                            value: task.isStopped,
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                if (!value) {
+                                  _taskStopReasonControllers[task.id]!.clear();
+                                }
+                                _tasks[index] = task.copyWith(
+                                  isStopped: value,
+                                  stoppedAt: value ? DateTime.now() : null,
+                                  isCompleted: value ? false : task.isCompleted,
+                                  completedAt: value ? null : task.completedAt,
+                                  stopReason: value ? task.stopReason : null,
+                                );
+                              });
+                            },
+                          ),
+                          TextFormField(
+                            controller: titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Task Title',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: descriptionController,
+                            decoration: const InputDecoration(
+                              labelText: 'Task Details (Optional)',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: notesController,
+                            decoration: const InputDecoration(
+                              labelText: 'Task Notes (Optional)',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: stopReasonController,
+                            enabled: task.isStopped,
+                            decoration: const InputDecoration(
+                              labelText: 'Stop Reason (Required if stopped)',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               );
             }),
           ),

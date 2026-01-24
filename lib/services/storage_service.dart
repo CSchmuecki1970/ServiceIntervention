@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/customer.dart';
 import '../models/task.dart';
 import '../models/service_intervention.dart';
+import 'settings_service.dart';
 
 class StorageException implements Exception {
   final String message;
@@ -23,6 +24,8 @@ class StorageService {
       Hive.registerAdapter(TaskAdapter());
       Hive.registerAdapter(ServiceInterventionAdapter());
       Hive.registerAdapter(InterventionStatusAdapter());
+
+      await SettingsService.init();
 
       try {
         interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');

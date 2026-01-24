@@ -25,6 +25,15 @@ class Task extends HiveObject {
   @HiveField(6)
   final DateTime? completedAt;
 
+  @HiveField(7)
+  final bool isStopped;
+
+  @HiveField(8)
+  final String? stopReason;
+
+  @HiveField(9)
+  final DateTime? stoppedAt;
+
   Task({
     required this.id,
     required this.title,
@@ -33,6 +42,9 @@ class Task extends HiveObject {
     required this.order,
     this.notes,
     this.completedAt,
+    this.isStopped = false,
+    this.stopReason,
+    this.stoppedAt,
   });
 
   Task copyWith({
@@ -43,6 +55,9 @@ class Task extends HiveObject {
     int? order,
     String? notes,
     DateTime? completedAt,
+    bool? isStopped,
+    String? stopReason,
+    DateTime? stoppedAt,
   }) {
     return Task(
       id: id ?? this.id,
@@ -52,6 +67,9 @@ class Task extends HiveObject {
       order: order ?? this.order,
       notes: notes ?? this.notes,
       completedAt: completedAt ?? this.completedAt,
+      isStopped: isStopped ?? this.isStopped,
+      stopReason: stopReason ?? this.stopReason,
+      stoppedAt: stoppedAt ?? this.stoppedAt,
     );
   }
 
@@ -64,6 +82,9 @@ class Task extends HiveObject {
       'order': order,
       'notes': notes,
       'completedAt': completedAt?.toIso8601String(),
+      'isStopped': isStopped,
+      'stopReason': stopReason,
+      'stoppedAt': stoppedAt?.toIso8601String(),
     };
   }
 
@@ -77,6 +98,11 @@ class Task extends HiveObject {
       notes: json['notes'] as String?,
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'] as String)
+          : null,
+      isStopped: json['isStopped'] as bool? ?? false,
+      stopReason: json['stopReason'] as String?,
+      stoppedAt: json['stoppedAt'] != null
+          ? DateTime.parse(json['stoppedAt'] as String)
           : null,
     );
   }

@@ -72,6 +72,9 @@ class ServiceIntervention extends HiveObject {
   @HiveField(21)
   final List<String> involvedPersons; // Names of people involved in the intervention
 
+  @HiveField(22)
+  final String currencyCode;
+
   ServiceIntervention({
     required this.id,
     required this.customer,
@@ -95,6 +98,7 @@ class ServiceIntervention extends HiveObject {
     this.hotelBreakfastIncluded,
     this.hotelRating,
     this.involvedPersons = const [],
+    this.currencyCode = 'EUR',
   });
 
   ServiceIntervention copyWith({
@@ -120,6 +124,7 @@ class ServiceIntervention extends HiveObject {
     bool? hotelBreakfastIncluded,
     double? hotelRating,
     List<String>? involvedPersons,
+    String? currencyCode,
   }) {
     return ServiceIntervention(
       id: id ?? this.id,
@@ -144,16 +149,19 @@ class ServiceIntervention extends HiveObject {
       hotelBreakfastIncluded: hotelBreakfastIncluded ?? this.hotelBreakfastIncluded,
       hotelRating: hotelRating ?? this.hotelRating,
       involvedPersons: involvedPersons ?? this.involvedPersons,
+      currencyCode: currencyCode ?? this.currencyCode,
     );
   }
 
   double get completionPercentage {
     if (tasks.isEmpty) return 0.0;
-    final completedTasks = tasks.where((t) => t.isCompleted).length;
+    final completedTasks =
+        tasks.where((t) => t.isCompleted || t.isStopped).length;
     return completedTasks / tasks.length;
   }
 
-  bool get isAllTasksCompleted => tasks.every((t) => t.isCompleted);
+  bool get isAllTasksCompleted =>
+      tasks.every((t) => t.isCompleted || t.isStopped);
 
   Map<String, dynamic> toJson() {
     return {
@@ -179,6 +187,7 @@ class ServiceIntervention extends HiveObject {
       'hotelBreakfastIncluded': hotelBreakfastIncluded,
       'hotelRating': hotelRating,
       'involvedPersons': involvedPersons,
+      'currencyCode': currencyCode,
     };
   }
 
@@ -220,6 +229,7 @@ class ServiceIntervention extends HiveObject {
       involvedPersons: (json['involvedPersons'] as List<dynamic>?)
           ?.map((p) => p as String)
           .toList() ?? [],
+      currencyCode: json['currencyCode'] as String? ?? 'EUR',
     );
   }
 }

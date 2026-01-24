@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/intervention_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/storage_service.dart';
 import 'create_intervention_screen.dart';
+import '../utils/currency_utils.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,6 +16,21 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _signatureNameController = TextEditingController();
+  final _signatureTitleController = TextEditingController();
+  final _signatureCompanyController = TextEditingController();
+  final _signatureNotesController = TextEditingController();
+  bool _signatureLoaded = false;
+
+  @override
+  void dispose() {
+    _signatureNameController.dispose();
+    _signatureTitleController.dispose();
+    _signatureCompanyController.dispose();
+    _signatureNotesController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,6 +78,123 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 24),
+
+          // Report Defaults Section
+          _buildSectionTitle(context, 'Report Defaults'),
+          Consumer<SettingsProvider>(
+            builder: (context, settingsProvider, child) {
+              if (!_signatureLoaded) {
+                _signatureNameController.text = settingsProvider.signatureName;
+                _signatureTitleController.text = settingsProvider.signatureTitle;
+                _signatureCompanyController.text = settingsProvider.signatureCompany;
+                _signatureNotesController.text = settingsProvider.signatureNotes;
+                _signatureLoaded = true;
+              }
+
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Signature',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _signatureNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _signatureTitleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Title / Role',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _signatureCompanyController,
+                        decoration: const InputDecoration(
+                          labelText: 'Company',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _signatureNotesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Signature Notes (Optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Default Currency',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: settingsProvider.defaultCurrencyCode,
+                        decoration: const InputDecoration(
+                          labelText: 'Currency',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.currency_exchange),
+                        ),
+                        items: CurrencyUtils.supportedCurrencies
+                            .map(
+                              (currency) => DropdownMenuItem(
+                                value: currency.code,
+                                child: Text(CurrencyUtils.labelFor(currency.code)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            settingsProvider.setDefaultCurrencyCode(value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await settingsProvider.updateSignature(
+                              name: _signatureNameController.text.trim(),
+                              title: _signatureTitleController.text.trim(),
+                              company: _signatureCompanyController.text.trim(),
+                              notes: _signatureNotesController.text.trim(),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Report defaults saved'),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.save),
+                          label: const Text('Save Defaults'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 24),
 

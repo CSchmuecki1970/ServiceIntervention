@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'providers/intervention_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/storage_service.dart';
 
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => InterventionProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

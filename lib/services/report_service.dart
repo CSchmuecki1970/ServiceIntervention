@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/service_intervention.dart';
+import '../utils/currency_utils.dart';
+import 'settings_service.dart';
 
 class ReportService {
   static Future<String> generateInterventionReport(ServiceIntervention intervention) async {
@@ -56,6 +59,8 @@ class ReportService {
     final buffer = StringBuffer();
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final dateFormatShort = DateFormat('dd/MM/yyyy');
+    final currencySymbol = CurrencyUtils.symbolFor(intervention.currencyCode);
+    final signature = SettingsService.getSignatureInfo();
 
     // Header
     buffer.writeln('═' * 80);
@@ -69,6 +74,7 @@ class ReportService {
     buffer.writeln('Title: ${intervention.title}');
     buffer.writeln('Created: ${dateFormat.format(intervention.createdAt)}');
     buffer.writeln('Completion: ${(intervention.completionPercentage * 100).toInt()}%');
+    buffer.writeln('Currency: ${intervention.currencyCode} ($currencySymbol)');
     buffer.writeln();
 
     // Customer Details
@@ -83,6 +89,16 @@ class ReportService {
       buffer.writeln('Email: ${intervention.customer.email}');
     }
     buffer.writeln();
+
+    // People Involved
+    if (intervention.involvedPersons.isNotEmpty) {
+      buffer.writeln('PEOPLE INVOLVED');
+      buffer.writeln('─' * 80);
+      for (final person in intervention.involvedPersons) {
+        buffer.writeln('- $person');
+      }
+      buffer.writeln();
+    }
 
     // Travel Information
     if (intervention.startDate != null || 
@@ -113,13 +129,13 @@ class ReportService {
             intervention.hotelCostSuite != null) {
           buffer.writeln('Costs per Day:');
           if (intervention.hotelCostSingle != null) {
-            buffer.writeln('  Single: \$${intervention.hotelCostSingle}');
+            buffer.writeln('  Single: $currencySymbol${intervention.hotelCostSingle}');
           }
           if (intervention.hotelCostDouble != null) {
-            buffer.writeln('  Double: \$${intervention.hotelCostDouble}');
+            buffer.writeln('  Double: $currencySymbol${intervention.hotelCostDouble}');
           }
           if (intervention.hotelCostSuite != null) {
-            buffer.writeln('  Suite: \$${intervention.hotelCostSuite}');
+            buffer.writeln('  Suite: $currencySymbol${intervention.hotelCostSuite}');
           }
         }
         // Breakfast and Rating
@@ -138,8 +154,11 @@ class ReportService {
     buffer.writeln('─' * 80);
     buffer.writeln('Total Tasks: ${intervention.tasks.length}');
     final completedCount = intervention.tasks.where((t) => t.isCompleted).length;
+    final stoppedCount = intervention.tasks.where((t) => t.isStopped).length;
+    final pendingCount = intervention.tasks.length - completedCount - stoppedCount;
     buffer.writeln('Completed: $completedCount');
-    buffer.writeln('Pending: ${intervention.tasks.length - completedCount}');
+    buffer.writeln('Stopped: $stoppedCount');
+    buffer.writeln('Pending: $pendingCount');
     buffer.writeln();
 
     // Detailed Tasks
@@ -151,7 +170,13 @@ class ReportService {
       buffer.writeln('');
       buffer.writeln('Task ${i + 1}: ${task.title}');
       buffer.writeln('─' * 80);
-      buffer.writeln('Status: ${task.isCompleted ? '✓ COMPLETED' : '○ PENDING'}');
+      if (task.isStopped) {
+        buffer.writeln('Status: ⛔ STOPPED');
+      } else if (task.isCompleted) {
+        buffer.writeln('Status: ✓ COMPLETED');
+      } else {
+        buffer.writeln('Status: ○ PENDING');
+      }
       
       if (task.description.isNotEmpty) {
         buffer.writeln('Description: ${task.description}');
@@ -161,6 +186,12 @@ class ReportService {
         buffer.writeln('');
         buffer.writeln('Notes:');
         buffer.writeln(task.notes);
+      }
+
+      if (task.isStopped && task.stopReason != null && task.stopReason!.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('Stop Reason:');
+        buffer.writeln(task.stopReason);
       }
       
       buffer.writeln();
@@ -184,6 +215,26 @@ class ReportService {
       buffer.writeln('GENERAL NOTES');
       buffer.writeln('─' * 80);
       buffer.writeln(intervention.generalNotes);
+      buffer.writeln();
+    }
+
+    // Signature
+    final signatureHasContent = signature.values.any((value) => value.trim().isNotEmpty);
+    if (signatureHasContent) {
+      buffer.writeln('SIGNATURE');
+      buffer.writeln('─' * 80);
+      if (signature['name']!.trim().isNotEmpty) {
+        buffer.writeln('Name: ${signature['name']}');
+      }
+      if (signature['title']!.trim().isNotEmpty) {
+        buffer.writeln('Title: ${signature['title']}');
+      }
+      if (signature['company']!.trim().isNotEmpty) {
+        buffer.writeln('Company: ${signature['company']}');
+      }
+      if (signature['notes']!.trim().isNotEmpty) {
+        buffer.writeln('Notes: ${signature['notes']}');
+      }
       buffer.writeln();
     }
 
@@ -219,182 +270,262 @@ class ReportService {
       final fileName = 'Intervention_${intervention.title.replaceAll(' ', '_')}_$timestamp.pdf';
       final file = File('${directory.path}/$fileName');
 
-      final pdf = pw.Document();
-
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
-          build: (pw.Context context) {
-            return [
-              // Header
-              pw.Header(
-                level: 0,
-                child: pw.Text(
-                  'SERVICE INTERVENTION REPORT',
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-              pw.SizedBox(height: 20),
-
-              // Intervention Details
-              pw.Text(
-                'INTERVENTION DETAILS',
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                  decoration: pw.TextDecoration.underline,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-              pw.Text('Title: ${intervention.title}'),
-              pw.Text('Created: ${DateFormat('dd/MM/yyyy HH:mm').format(intervention.createdAt)}'),
-              pw.Text('Completion: ${(intervention.completionPercentage * 100).toInt()}%'),
-              pw.SizedBox(height: 20),
-
-              // Customer Information
-              pw.Text(
-                'CUSTOMER INFORMATION',
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                  decoration: pw.TextDecoration.underline,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-              pw.Text('Name: ${intervention.customer.name}'),
-              pw.Text('Address: ${intervention.customer.address}'),
-              if (intervention.customer.phone != null && intervention.customer.phone!.isNotEmpty)
-                pw.Text('Phone: ${intervention.customer.phone}'),
-              if (intervention.customer.email != null && intervention.customer.email!.isNotEmpty)
-                pw.Text('Email: ${intervention.customer.email}'),
-              pw.SizedBox(height: 20),
-
-              // Travel Information
-              if (intervention.startDate != null ||
-                  intervention.endDate != null ||
-                  intervention.hotelName != null ||
-                  intervention.hotelAddress != null) ...[
-                pw.Text(
-                  'TRAVEL INFORMATION',
-                  style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    decoration: pw.TextDecoration.underline,
-                  ),
-                ),
-                pw.SizedBox(height: 10),
-                if (intervention.startDate != null || intervention.endDate != null) ...[
-                  pw.Text('Travel Period:'),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.only(left: 16),
-                    child: pw.Text(
-                      'From: ${intervention.startDate != null ? DateFormat('dd/MM/yyyy').format(intervention.startDate!) : 'Not specified'}',
-                    ),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.only(left: 16),
-                    child: pw.Text(
-                      'To: ${intervention.endDate != null ? DateFormat('dd/MM/yyyy').format(intervention.endDate!) : 'Not specified'}',
-                    ),
-                  ),
-                ],
-                if (intervention.hotelName != null && intervention.hotelName!.isNotEmpty) ...[
-                  pw.SizedBox(height: 10),
-                  pw.Text('Hotel: ${intervention.hotelName}'),
-                  if (intervention.hotelAddress != null && intervention.hotelAddress!.isNotEmpty)
-                    pw.Text('Hotel Address: ${intervention.hotelAddress}'),
-                ],
-                pw.SizedBox(height: 20),
-              ],
-
-              // Tasks
-              pw.Text(
-                'TASKS',
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                  decoration: pw.TextDecoration.underline,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-              ...intervention.tasks.map((task) {
-                return pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 12),
-                  padding: const pw.EdgeInsets.all(8),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey),
-                    borderRadius: pw.BorderRadius.circular(4),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Row(
-                        children: [
-                          pw.Text(
-                            '${intervention.tasks.indexOf(task) + 1}. ${task.title}',
-                            style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold,
-                              decoration: task.isCompleted
-                                  ? pw.TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          pw.Spacer(),
-                          pw.Text(
-                            task.isCompleted ? 'COMPLETED' : 'PENDING',
-                            style: pw.TextStyle(
-                              color: task.isCompleted ? PdfColors.green : PdfColors.red,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (task.description.isNotEmpty) ...[
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          task.description,
-                          style: const pw.TextStyle(fontSize: 10),
-                        ),
-                      ],
-                      if (task.notes != null && task.notes!.isNotEmpty) ...[
-                        pw.SizedBox(height: 8),
-                        pw.Text(
-                          'Notes: ${task.notes}',
-                          style: pw.TextStyle(
-                            fontStyle: pw.FontStyle.italic,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
-
-              // Footer
-              pw.SizedBox(height: 20),
-              pw.Divider(),
-              pw.Text(
-                'Report generated on ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
-                textAlign: pw.TextAlign.center,
-              ),
-            ];
-          },
-        ),
-      );
-
-      final bytes = await pdf.save();
+      final bytes = await buildReportPdfBytes(intervention);
       await file.writeAsBytes(bytes);
 
       return file;
     } catch (e) {
       throw Exception('Failed to export PDF report: $e');
     }
+  }
+
+  static Future<Uint8List> buildReportPdfBytes(
+    ServiceIntervention intervention,
+  ) async {
+    final pdf = pw.Document();
+    final currencySymbol = CurrencyUtils.symbolFor(intervention.currencyCode);
+    final signature = SettingsService.getSignatureInfo();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Header(
+              level: 0,
+              child: pw.Text(
+                'SERVICE INTERVENTION REPORT',
+                style: pw.TextStyle(
+                  fontSize: 24,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // People Involved
+            if (intervention.involvedPersons.isNotEmpty) ...[
+              pw.Text(
+                'PEOPLE INVOLVED',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  decoration: pw.TextDecoration.underline,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              ...intervention.involvedPersons.map((person) => pw.Text('• $person')),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Intervention Details
+            pw.Text(
+              'INTERVENTION DETAILS',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                decoration: pw.TextDecoration.underline,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Title: ${intervention.title}'),
+            pw.Text('Created: ${DateFormat('dd/MM/yyyy HH:mm').format(intervention.createdAt)}'),
+            pw.Text('Completion: ${(intervention.completionPercentage * 100).toInt()}%'),
+            pw.Text('Currency: ${intervention.currencyCode} ($currencySymbol)'),
+            pw.SizedBox(height: 20),
+
+            // Customer Information
+            pw.Text(
+              'CUSTOMER INFORMATION',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                decoration: pw.TextDecoration.underline,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Name: ${intervention.customer.name}'),
+            pw.Text('Address: ${intervention.customer.address}'),
+            if (intervention.customer.phone != null && intervention.customer.phone!.isNotEmpty)
+              pw.Text('Phone: ${intervention.customer.phone}'),
+            if (intervention.customer.email != null && intervention.customer.email!.isNotEmpty)
+              pw.Text('Email: ${intervention.customer.email}'),
+            pw.SizedBox(height: 20),
+
+            // Travel Information
+            if (intervention.startDate != null ||
+                intervention.endDate != null ||
+                intervention.hotelName != null ||
+                intervention.hotelAddress != null) ...[
+              pw.Text(
+                'TRAVEL INFORMATION',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  decoration: pw.TextDecoration.underline,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              if (intervention.startDate != null || intervention.endDate != null) ...[
+                pw.Text('Travel Period:'),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(left: 16),
+                  child: pw.Text(
+                    'From: ${intervention.startDate != null ? DateFormat('dd/MM/yyyy').format(intervention.startDate!) : 'Not specified'}',
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(left: 16),
+                  child: pw.Text(
+                    'To: ${intervention.endDate != null ? DateFormat('dd/MM/yyyy').format(intervention.endDate!) : 'Not specified'}',
+                  ),
+                ),
+              ],
+              if (intervention.hotelName != null && intervention.hotelName!.isNotEmpty) ...[
+                pw.SizedBox(height: 10),
+                pw.Text('Hotel: ${intervention.hotelName}'),
+                if (intervention.hotelAddress != null && intervention.hotelAddress!.isNotEmpty)
+                  pw.Text('Hotel Address: ${intervention.hotelAddress}'),
+              ],
+              if (intervention.hotelCostSingle != null ||
+                  intervention.hotelCostDouble != null ||
+                  intervention.hotelCostSuite != null) ...[
+                pw.SizedBox(height: 8),
+                pw.Text('Costs per Day:'),
+                if (intervention.hotelCostSingle != null)
+                  pw.Text('  Single: $currencySymbol${intervention.hotelCostSingle}'),
+                if (intervention.hotelCostDouble != null)
+                  pw.Text('  Double: $currencySymbol${intervention.hotelCostDouble}'),
+                if (intervention.hotelCostSuite != null)
+                  pw.Text('  Suite: $currencySymbol${intervention.hotelCostSuite}'),
+              ],
+              if (intervention.hotelBreakfastIncluded == true)
+                pw.Text('Breakfast: Included'),
+              if (intervention.hotelRating != null)
+                pw.Text('Rating: ${intervention.hotelRating}/5 ★'),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Tasks
+            pw.Text(
+              'TASKS',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                decoration: pw.TextDecoration.underline,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            ...intervention.tasks.map((task) {
+              final statusText = task.isStopped
+                  ? 'STOPPED'
+                  : task.isCompleted
+                      ? 'COMPLETED'
+                      : 'PENDING';
+              final statusColor = task.isStopped
+                  ? PdfColors.red
+                  : task.isCompleted
+                      ? PdfColors.green
+                      : PdfColors.orange;
+
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 12),
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      children: [
+                        pw.Text(
+                          '${intervention.tasks.indexOf(task) + 1}. ${task.title}',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            decoration: task.isCompleted
+                                ? pw.TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        pw.Spacer(),
+                        pw.Text(
+                          statusText,
+                          style: pw.TextStyle(
+                            color: statusColor,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (task.description.isNotEmpty) ...[
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        task.description,
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
+                    ],
+                    if (task.notes != null && task.notes!.isNotEmpty) ...[
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        'Notes: ${task.notes}',
+                        style: pw.TextStyle(
+                          fontStyle: pw.FontStyle.italic,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                    if (task.isStopped && task.stopReason != null && task.stopReason!.isNotEmpty) ...[
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        'Stop Reason: ${task.stopReason}',
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+
+            // Signature
+            if (signature.values.any((value) => value.trim().isNotEmpty)) ...[
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'SIGNATURE',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  decoration: pw.TextDecoration.underline,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              if (signature['name']!.trim().isNotEmpty)
+                pw.Text('Name: ${signature['name']}'),
+              if (signature['title']!.trim().isNotEmpty)
+                pw.Text('Title: ${signature['title']}'),
+              if (signature['company']!.trim().isNotEmpty)
+                pw.Text('Company: ${signature['company']}'),
+              if (signature['notes']!.trim().isNotEmpty)
+                pw.Text('Notes: ${signature['notes']}'),
+            ],
+
+            // Footer
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.Text(
+              'Report generated on ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+              textAlign: pw.TextAlign.center,
+            ),
+          ];
+        },
+      ),
+    );
+
+    return pdf.save();
   }
 }
