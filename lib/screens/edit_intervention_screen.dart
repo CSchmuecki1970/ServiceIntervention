@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:file_selector/file_selector.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
@@ -242,8 +245,41 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
       );
 
       if (files.isNotEmpty && mounted) {
+        // Copy selected files into app-managed folder per intervention so
+        // attachments stay together even if original files are moved/deleted.
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final destDir = Directory(p.join(appDocDir.path, 'interventions', widget.intervention.id, 'attachments'));
+        if (!await destDir.exists()) {
+          await destDir.create(recursive: true);
+        }
+
+        final List<String> copiedPaths = [];
+        for (final f in files) {
+          try {
+            final source = File(f.path);
+            final baseName = p.basename(f.path);
+            var destPath = p.join(destDir.path, baseName);
+            // avoid name collision
+            if (await File(destPath).exists()) {
+              final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+              final name = p.basenameWithoutExtension(baseName);
+              final ext = p.extension(baseName);
+              destPath = p.join(destDir.path, '\$name-\$stamp$ext');
+            }
+            await source.copy(destPath);
+            copiedPaths.add(destPath);
+          } catch (e) {
+            // continue copying other files
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to copy ${f.name}: $e')),
+              );
+            }
+          }
+        }
+
         setState(() {
-          _documents.addAll(files.map((f) => f.path));
+          _documents.addAll(copiedPaths);
         });
       }
     } catch (e) {
@@ -398,7 +434,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _currencyCode,
+          initialValue: _currencyCode,
           decoration: const InputDecoration(
             labelText: 'Currency',
             border: OutlineInputBorder(),
@@ -463,7 +499,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                 controller: _hotelCostSingleController,
                 decoration: InputDecoration(
                   labelText: 'Single',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
@@ -475,7 +511,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                 controller: _hotelCostDoubleController,
                 decoration: InputDecoration(
                   labelText: 'Double',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
@@ -487,7 +523,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                 controller: _hotelCostSuiteController,
                 decoration: InputDecoration(
                   labelText: 'Suite',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,

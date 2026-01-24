@@ -8,6 +8,7 @@ import '../providers/settings_provider.dart';
 import '../services/storage_service.dart';
 import '../services/export_service.dart';
 import 'package:file_selector/file_selector.dart';
+import '../screens/view_archive_screen.dart';
 import 'create_intervention_screen.dart';
 import '../utils/currency_utils.dart';
 
@@ -220,6 +221,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Import Data',
                   subtitle: 'Import plannings from JSON file',
                   onTap: () => _showImportDialog(context),
+                ),
+                const Divider(height: 1),
+                _buildTile(
+                  context,
+                  icon: Icons.archive,
+                  title: 'View Archive',
+                  subtitle: 'Open and preview a .zip archive',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ViewArchiveScreen()),
+                    );
+                  },
                 ),
               ],
             ),

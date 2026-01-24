@@ -7,6 +7,10 @@ import 'roadmap_screen.dart';
 import 'edit_intervention_screen.dart';
 import 'report_preview_screen.dart';
 import '../utils/currency_utils.dart';
+import '../services/archive_service.dart';
+import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 
 class InterventionDetailScreen extends StatelessWidget {
   final String interventionId;
@@ -41,6 +45,84 @@ class InterventionDetailScreen extends StatelessWidget {
                       ),
                     ),
                   );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.archive_outlined),
+                tooltip: 'Export Archive',
+                onPressed: () async {
+                  // Show blocking progress dialog
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Dialog(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(width: 16),
+                            Text('Creating archive...'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+
+                  String? path;
+                  try {
+                    path = await ArchiveService.createInterventionArchive(intervention, includePdfReport: true);
+                  } catch (e) {
+                    path = null;
+                  }
+
+                  if (context.mounted) Navigator.pop(context); // close progress
+
+                  if (path != null) {
+                    final archivePath = path;
+                    // Show result dialog with actions
+                    if (context.mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Archive Created'),
+                          content: Text('Saved to:\n$archivePath'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                OpenFile.open(archivePath);
+                              },
+                              child: const Text('Open'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                try {
+                                  await Share.shareXFiles([XFile(archivePath)], text: 'Intervention archive');
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Share failed: $e')));
+                                  }
+                                }
+                              },
+                              child: const Text('Share'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to create archive'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
                 },
               ),
               if (intervention.status == InterventionStatus.planned ||
