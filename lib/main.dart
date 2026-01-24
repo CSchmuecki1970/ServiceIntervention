@@ -6,7 +6,7 @@ import 'providers/theme_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/storage_service.dart';
 
-void main() async {
+void main() async {https://continue.gallerycdn.vsassets.io/extensions/continue/continue/1.2.14/1768433945273/Microsoft.VisualStudio.Services.Icons.Default?targetPlatform=win32-x64
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await StorageService.init();

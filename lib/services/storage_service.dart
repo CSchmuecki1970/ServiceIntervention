@@ -24,8 +24,21 @@ class StorageService {
       Hive.registerAdapter(ServiceInterventionAdapter());
       Hive.registerAdapter(InterventionStatusAdapter());
 
-      interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
-      customersBox = await Hive.openBox<Customer>('customers');
+      try {
+        interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
+      } catch (e) {
+        // If there's an error opening the box (likely due to schema changes), delete it and recreate
+        await Hive.deleteBoxFromDisk('interventions');
+        interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
+      }
+
+      try {
+        customersBox = await Hive.openBox<Customer>('customers');
+      } catch (e) {
+        await Hive.deleteBoxFromDisk('customers');
+        customersBox = await Hive.openBox<Customer>('customers');
+      }
+
       lastSync = DateTime.now();
     } catch (e) {
       throw StorageException('Failed to initialize storage: $e');

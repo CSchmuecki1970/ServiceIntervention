@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
 import 'roadmap_screen.dart';
+import 'edit_intervention_screen.dart';
 
 class InterventionDetailScreen extends StatelessWidget {
   final String interventionId;
@@ -26,6 +27,22 @@ class InterventionDetailScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(intervention.title),
             actions: [
+              if (intervention.status == InterventionStatus.planned ||
+                  intervention.status == InterventionStatus.inProgress)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'Edit Intervention',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditInterventionScreen(
+                          intervention: intervention,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               if (intervention.status == InterventionStatus.planned ||
                   intervention.status == InterventionStatus.inProgress)
                 IconButton(
@@ -75,8 +92,22 @@ class InterventionDetailScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 _ScheduleCard(intervention: intervention),
                 const SizedBox(height: 16),
+                if (intervention.involvedPersons.isNotEmpty)
+                  _InvolvedPersonsCard(intervention: intervention),
+                if (intervention.involvedPersons.isNotEmpty)
+                  const SizedBox(height: 16),
+                if (intervention.startDate != null || intervention.endDate != null || 
+                    intervention.hotelName != null || intervention.hotelAddress != null)
+                  _TravelInformationCard(intervention: intervention),
+                if (intervention.startDate != null || intervention.endDate != null || 
+                    intervention.hotelName != null || intervention.hotelAddress != null)
+                  const SizedBox(height: 16),
                 _TasksCard(intervention: intervention),
                 const SizedBox(height: 16),
+                if (intervention.documents.isNotEmpty)
+                  _DocumentsCard(intervention: intervention),
+                if (intervention.documents.isNotEmpty)
+                  const SizedBox(height: 16),
                 if (intervention.generalNotes != null &&
                     intervention.generalNotes!.isNotEmpty)
                   _NotesCard(intervention: intervention),
@@ -127,6 +158,14 @@ class InterventionDetailScreen extends StatelessWidget {
         },
         icon: const Icon(Icons.route),
         label: const Text('Continue Roadmap'),
+      );
+    } else if (intervention.status == InterventionStatus.completed) {
+      return FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.pop(context);
+        },
+        icon: const Icon(Icons.home),
+        label: const Text('Back to Home'),
       );
     }
     return null;
@@ -328,7 +367,7 @@ class _ScheduleCard extends StatelessWidget {
                 Icon(Icons.calendar_today, color: Colors.blue[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Schedule',
+                  'Planned Information',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -459,6 +498,322 @@ class _NotesCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(intervention.generalNotes!),
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _TravelInformationCard extends StatelessWidget {
+  final ServiceIntervention intervention;
+
+  const _TravelInformationCard({required this.intervention});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.travel_explore, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'Travel Information',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (intervention.startDate != null || intervention.endDate != null) ...[
+              _buildInfoRow('Travel Dates', context),
+              if (intervention.startDate != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Icon(Icons.date_range, size: 18, color: Colors.grey[600]),
+                      const SizedBox(width: 8),
+                      Text(
+                        'From: ${dateFormat.format(intervention.startDate!)}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              if (intervention.endDate != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Icon(Icons.date_range, size: 18, color: Colors.grey[600]),
+                      const SizedBox(width: 8),
+                      Text(
+                        'To: ${dateFormat.format(intervention.endDate!)}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+            if (intervention.hotelName != null && intervention.hotelName!.isNotEmpty) ...[
+              _buildInfoRow('Hotel Information', context),
+              Padding(
+                padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const SizedBox(width: 16),
+                        Icon(Icons.hotel, size: 18, color: Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                intervention.hotelName!,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                              if (intervention.hotelAddress != null &&
+                                  intervention.hotelAddress!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    intervention.hotelAddress!,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Hotel Costs
+                    if (intervention.hotelCostSingle != null ||
+                        intervention.hotelCostDouble != null ||
+                        intervention.hotelCostSuite != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'Costs per Day',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 16,
+                        children: [
+                          if (intervention.hotelCostSingle != null)
+                            Text(
+                              'Single: \$${intervention.hotelCostSingle}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (intervention.hotelCostDouble != null)
+                            Text(
+                              'Double: \$${intervention.hotelCostDouble}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (intervention.hotelCostSuite != null)
+                            Text(
+                              'Suite: \$${intervention.hotelCostSuite}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ],
+                    // Hotel Breakfast & Rating
+                    if (intervention.hotelBreakfastIncluded != null ||
+                        intervention.hotelRating != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          if (intervention.hotelBreakfastIncluded == true)
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Icon(Icons.restaurant, size: 16, color: Colors.orange[700]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Breakfast Included',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (intervention.hotelRating != null)
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Icon(Icons.star, size: 16, color: Colors.amber[700]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${intervention.hotelRating}/5',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[700],
+            ),
+      ),
+    );
+  }
+}
+
+class _DocumentsCard extends StatelessWidget {
+  final ServiceIntervention intervention;
+
+  const _DocumentsCard({required this.intervention});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.attach_file, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'Documents & Pictures (${intervention.documents.length})',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: intervention.documents.length,
+              itemBuilder: (context, index) {
+                final docPath = intervention.documents[index];
+                final fileName = docPath.split('/').last;
+                
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _getDocumentIcon(fileName),
+                        color: Colors.grey[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          fileName,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getDocumentIcon(String fileName) {
+    if (fileName.toLowerCase().endsWith('.pdf')) {
+      return Icons.picture_as_pdf;
+    } else if (_isImageFile(fileName)) {
+      return Icons.image;
+    } else if (fileName.toLowerCase().endsWith('.doc') ||
+        fileName.toLowerCase().endsWith('.docx')) {
+      return Icons.description;
+    }
+    return Icons.attach_file;
+  }
+
+  bool _isImageFile(String fileName) {
+    final ext = fileName.toLowerCase();
+    return ext.endsWith('.jpg') ||
+        ext.endsWith('.jpeg') ||
+        ext.endsWith('.png') ||
+        ext.endsWith('.gif') ||
+        ext.endsWith('.webp');
+  }
+}
+
+class _InvolvedPersonsCard extends StatelessWidget {
+  final ServiceIntervention intervention;
+
+  const _InvolvedPersonsCard({required this.intervention});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.group, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'People Involved',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: intervention.involvedPersons.map((person) {
+                return Chip(
+                  label: Text(person),
+                  avatar: Icon(Icons.person, size: 18, color: Colors.blue[700]),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),

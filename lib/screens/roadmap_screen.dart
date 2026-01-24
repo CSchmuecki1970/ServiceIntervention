@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'dart:io';
 import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
 import '../models/task.dart';
+import '../services/report_service.dart';
+import 'create_intervention_screen.dart';
 
 class RoadmapScreen extends StatefulWidget {
   final String interventionId;
@@ -20,12 +24,25 @@ class RoadmapScreen extends StatefulWidget {
 class _RoadmapScreenState extends State<RoadmapScreen> {
   int _currentTaskIndex = 0;
   final Map<String, TextEditingController> _notesControllers = {};
+  late stt.SpeechToText _speechToText;
+  bool _isListening = false;
+  String _listeningTaskId = '';
+  final Map<String, bool> _isSaved = {};
+  final Map<String, DateTime> _lastSaveTime = {};
+  final Map<String, String> _listeningText = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _speechToText = stt.SpeechToText();
+  }
 
   @override
   void dispose() {
     for (var controller in _notesControllers.values) {
       controller.dispose();
     }
+    _speechToText.stop();
     super.dispose();
   }
 
@@ -45,6 +62,112 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       }
     }
     return intervention.tasks.length - 1;
+  }
+
+  void _startListening(String taskId) async {
+    // Check if platform supports speech_to_text
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Speech-to-text is only available on Android and iOS'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (!_isListening) {
+      bool available = await _speechToText.initialize(
+        onError: (error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${error.errorMsg}')),
+          );
+        },
+        onStatus: (status) {},
+      );
+
+      if (available) {
+        setState(() {
+          _isListening = true;
+          _listeningTaskId = taskId;
+        });
+
+        _speechToText.listen(
+          listenFor: const Duration(minutes: 5),
+          pauseFor: const Duration(seconds: 4),
+          onResult: (result) {
+            setState(() {
+              if (_notesControllers.containsKey(taskId)) {
+                _notesControllers[taskId]!.text = result.recognizedWords;
+                _listeningText[taskId] = result.recognizedWords;
+              }
+            });
+
+            if (result.finalResult) {
+              // Update the provider with the final text
+              try {
+                Provider.of<InterventionProvider>(context, listen: false)
+                    .updateTaskNotes(widget.interventionId, taskId, result.recognizedWords);
+                
+                // Show save confirmation and visual indicator
+                setState(() {
+                  _isSaved[taskId] = true;
+                  _lastSaveTime[taskId] = DateTime.now();
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Task notes saved from speech', style: TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                    backgroundColor: Colors.green[600],
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+
+                // Reset save indicator after 3 seconds
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) {
+                    setState(() {
+                      _isSaved[taskId] = false;
+                    });
+                  }
+                });
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.error, color: Colors.white),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text('Failed to save: ${e.toString()}', style: const TextStyle(color: Colors.white))),
+                      ],
+                    ),
+                    backgroundColor: Colors.red[600],
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            }
+          },
+        );
+      }
+    } else {
+      _stopListening();
+    }
+  }
+
+  void _stopListening() {
+    _speechToText.stop();
+    setState(() {
+      _listeningText.clear();
+      _isListening = false;
+      _listeningTaskId = '';
+    });
   }
 
   @override
@@ -76,6 +199,63 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
           appBar: AppBar(
             title: Text(intervention.title),
             actions: [
+              PopupMenuButton<String>(
+                tooltip: 'Export Report',
+                onSelected: (value) async {
+                  try {
+                    File file;
+                    if (value == 'pdf') {
+                      file = await ReportService.exportReportAsPdf(intervention);
+                    } else {
+                      file = await ReportService.exportReportAsText(intervention);
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.white),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text('${value.toUpperCase()} report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: Colors.green[600],
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error generating ${value.toUpperCase()} report: $e', style: const TextStyle(color: Colors.white)),
+                        backgroundColor: Colors.red[600],
+                      ),
+                    );
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: 'pdf',
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Export as PDF'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'text',
+                    child: Row(
+                      children: [
+                        Icon(Icons.text_snippet),
+                        SizedBox(width: 8),
+                        Text('Export as Text'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
                 onPressed: () {
@@ -110,10 +290,10 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
           ),
           body: Column(
             children: [
-              // Progress indicator
+              // Progress indicator - more compact
               Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.blue[50],
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Theme.of(context).colorScheme.surfaceVariant,
                 child: Column(
                   children: [
                     Row(
@@ -121,20 +301,21 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                       children: [
                         Text(
                           'Task ${_currentTaskIndex + 1} of ${intervention.tasks.length}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
+                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                               ),
                         ),
                         Text(
                           '${(intervention.completionPercentage * 100).toInt()}% Complete',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.blue[700],
                               ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     LinearProgressIndicator(
                       value: intervention.completionPercentage,
                       backgroundColor: Colors.grey[300],
@@ -144,165 +325,316 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                 ),
               ),
 
-              // Current task card
+              // Current task card and notes - give more space to notes
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Task roadmap visualization
+                      // Task roadmap visualization - more compact
                       _TaskRoadmap(
                         tasks: intervention.tasks,
                         currentIndex: _currentTaskIndex,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
-                      // Current task details
+                      // Current task details - more compact
                       Card(
                         elevation: 4,
-                        color: Colors.blue[50],
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
+                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final padding = constraints.maxWidth < 400 ? 8.0 : 12.0;
+                            final spacing = constraints.maxWidth < 400 ? 6.0 : 8.0;
+                            
+                            return Padding(
+                              padding: EdgeInsets.all(padding),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue[700],
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            '${_currentTaskIndex + 1}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          currentTask.title,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (currentTask.isCompleted) ...[
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green[700],
+                                          size: 24,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  SizedBox(height: spacing),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      currentTask.description.isNotEmpty
+                                          ? currentTask.description
+                                          : currentTask.title,
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  SizedBox(height: spacing),
+                                  if (_isSaved[currentTask.id] ?? false)
+                                    Row(
+                                      children: [
+                                        Icon(Icons.check_circle, color: Colors.green[600], size: 18),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Saved',
+                                          style: TextStyle(
+                                            color: Colors.green[600],
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Real-time listening display
+                      if (_isListening && _listeningTaskId == currentTask.id)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[300]!, width: 2),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue[700],
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${_currentTaskIndex + 1}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                      ),
+                                  const Icon(Icons.mic, color: Colors.red, size: 16),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Listening...',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      currentTask.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ),
-                                  if (currentTask.isCompleted)
-                                    Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green[700],
-                                      size: 32,
-                                    ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  currentTask.description.isNotEmpty
-                                      ? currentTask.description
-                                      : currentTask.title,
-                                  style: Theme.of(context).textTheme.bodyLarge,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Task Notes:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
                               const SizedBox(height: 8),
-                              TextField(
-                                controller: _notesControllers[currentTask.id],
-                                decoration: InputDecoration(
-                                  hintText: 'Add notes for this task...',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                ),
-                                maxLines: 4,
-                                onChanged: (value) {
-                                  provider.updateTaskNotes(
-                                    widget.interventionId,
-                                    currentTask.id,
-                                    value,
-                                  );
-                                },
+                              Text(
+                                _listeningText[currentTask.id] ?? '',
+                                style: const TextStyle(fontSize: 14, color: Colors.black),
                               ),
                             ],
                           ),
                         ),
+                      if (_isListening && _listeningTaskId == currentTask.id)
+                        const SizedBox(height: 12),
+                      TextField(
+                        controller: _notesControllers[currentTask.id],
+                        style: const TextStyle(color: Colors.black),
+                        decoration: InputDecoration(
+                          hintText: 'Add notes for this task...',
+                          hintStyle: const TextStyle(color: Colors.grey),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          suffixIcon: Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: IconButton(
+                              icon: Icon(
+                                _isListening && _listeningTaskId == currentTask.id
+                                    ? Icons.mic
+                                    : Icons.mic_none,
+                                color: (Platform.isAndroid || Platform.isIOS)
+                                    ? (_isListening && _listeningTaskId == currentTask.id
+                                        ? Colors.red
+                                        : Colors.blue[700])
+                                    : Colors.grey,
+                              ),
+                              onPressed: (Platform.isAndroid || Platform.isIOS)
+                                  ? () {
+                                      if (_isListening && _listeningTaskId == currentTask.id) {
+                                        _stopListening();
+                                      } else {
+                                        _startListening(currentTask.id);
+                                      }
+                                    }
+                                  : null,
+                              tooltip: (Platform.isAndroid || Platform.isIOS)
+                                  ? (_isListening && _listeningTaskId == currentTask.id
+                                      ? 'Stop Recording'
+                                      : 'Start Recording')
+                                  : 'Not available on this platform',
+                            ),
+                          ),
+                        ),
+                        maxLines: 8,
+                        minLines: 6,
+                        onChanged: (value) {
+                          final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                          currentProvider.updateTaskNotes(
+                            widget.interventionId,
+                            currentTask.id,
+                            value,
+                          );
+                        },
                       ),
                       const SizedBox(height: 24),
 
                       // Navigation buttons
                       if (!isAllCompleted) ...[
-                        Row(
-                          children: [
-                            if (_currentTaskIndex > 0)
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      _currentTaskIndex--;
-                                    });
-                                  },
-                                  icon: const Icon(Icons.arrow_back),
-                                  label: const Text('Previous Task'),
-                                ),
-                              ),
-                            if (_currentTaskIndex > 0) const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: currentTask.isCompleted
-                                    ? null
-                                    : () async {
-                                        await provider.completeTask(
-                                          widget.interventionId,
-                                          currentTask.id,
-                                        );
-                                        if (mounted) {
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            // If screen is narrow (portrait), stack buttons vertically
+                            if (constraints.maxWidth < 400) {
+                              return Column(
+                                children: [
+                                  if (_currentTaskIndex > 0)
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
                                           setState(() {
-                                            if (!isLastTask) {
-                                              _currentTaskIndex++;
-                                            }
+                                            _currentTaskIndex--;
                                           });
-                                        }
-                                      },
-                                icon: Icon(
-                                  isLastTask ? Icons.check : Icons.arrow_forward,
-                                ),
-                                label: Text(
-                                  isLastTask ? 'Complete' : 'Complete & Next',
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  backgroundColor: Colors.blue[700],
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
+                                        },
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Previous Task'),
+                                      ),
+                                    ),
+                                  if (_currentTaskIndex > 0) const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: currentTask.isCompleted
+                                          ? null
+                                          : () async {
+                                              final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                                              await currentProvider.completeTask(
+                                                widget.interventionId,
+                                                currentTask.id,
+                                              );
+                                              if (mounted) {
+                                                setState(() {
+                                                  if (!isLastTask) {
+                                                    _currentTaskIndex++;
+                                                  }
+                                                });
+                                              }
+                                            },
+                                      icon: Icon(
+                                        isLastTask ? Icons.check : Icons.arrow_forward,
+                                      ),
+                                      label: Text(
+                                        isLastTask ? 'Complete' : 'Complete & Next',
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        backgroundColor: Colors.blue[700],
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            } else {
+                              // If screen is wide (landscape), use horizontal layout
+                              return Row(
+                                children: [
+                                  if (_currentTaskIndex > 0)
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          setState(() {
+                                            _currentTaskIndex--;
+                                          });
+                                        },
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Previous Task'),
+                                      ),
+                                    ),
+                                  if (_currentTaskIndex > 0) const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: currentTask.isCompleted
+                                          ? null
+                                          : () async {
+                                              final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                                              await currentProvider.completeTask(
+                                                widget.interventionId,
+                                                currentTask.id,
+                                              );
+                                              if (mounted) {
+                                                setState(() {
+                                                  if (!isLastTask) {
+                                                    _currentTaskIndex++;
+                                                  }
+                                                });
+                                              }
+                                            },
+                                      icon: Icon(
+                                        isLastTask ? Icons.check : Icons.arrow_forward,
+                                      ),
+                                      label: Text(
+                                        isLastTask ? 'Complete' : 'Complete & Next',
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        backgroundColor: Colors.blue[700],
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                          },
                         ),
                       ] else ...[
                         Card(
@@ -333,6 +665,85 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.bodyLarge,
                                 ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        try {
+                                          final file = await ReportService.exportReportAsPdf(intervention);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.check_circle, color: Colors.white),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text('PDF report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                              backgroundColor: Colors.green[600],
+                                              duration: const Duration(seconds: 3),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Error generating PDF report: $e', style: const TextStyle(color: Colors.white)),
+                                              backgroundColor: Colors.red[600],
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      icon: const Icon(Icons.picture_as_pdf),
+                                      label: const Text('PDF Report'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red[700],
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        try {
+                                          final file = await ReportService.exportReportAsText(intervention);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.check_circle, color: Colors.white),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text('Text report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                              backgroundColor: Colors.green[600],
+                                              duration: const Duration(seconds: 3),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Error generating text report: $e', style: const TextStyle(color: Colors.white)),
+                                              backgroundColor: Colors.red[600],
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      icon: const Icon(Icons.text_snippet),
+                                      label: const Text('Text Report'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue[700],
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -343,6 +754,18 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                 ),
               ),
             ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreateInterventionScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('New Intervention'),
           ),
         );
       },
@@ -431,33 +854,22 @@ class _TaskRoadmap extends StatelessWidget {
                         margin: const EdgeInsets.only(left: 15),
                       ),
                     if (index < tasks.length - 1) const SizedBox(width: 15),
+                    // Task text beside the roadmap
+                    Expanded(
+                      child: Text(
+                        '${index + 1}. ${task.title}',
+                        style: TextStyle(
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          color: isCompleted
+                              ? Colors.grey[600]
+                              : isCurrent
+                                  ? Colors.blue[700]
+                                  : Colors.black87,
+                          decoration: isCompleted ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                    ),
                   ],
-                ),
-              );
-            }),
-            // Task labels
-            ...tasks.asMap().entries.map((entry) {
-              final index = entry.key;
-              final task = entry.value;
-              final isCurrent = index == currentIndex;
-              final isCompleted = task.isCompleted;
-
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 48,
-                  bottom: index < tasks.length - 1 ? 16 : 0,
-                ),
-                child: Text(
-                  '${index + 1}. ${task.title}',
-                  style: TextStyle(
-                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                    color: isCompleted
-                        ? Colors.grey[600]
-                        : isCurrent
-                            ? Colors.blue[700]
-                            : Colors.black87,
-                    decoration: isCompleted ? TextDecoration.lineThrough : null,
-                  ),
                 ),
               );
             }),

@@ -44,7 +44,9 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       width: isExpanded ? 250 : 70,
-      color: Theme.of(context).colorScheme.surface,
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.grey[900]
+          : Colors.grey[100],
       child: Column(
         children: [
           // Header
@@ -81,7 +83,9 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                         Text(
                           'Manager',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey[600],
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white70
+                                    : Colors.grey[600],
                               ),
                         ),
                       ],
@@ -140,7 +144,9 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                                 item.icon,
                                 color: isSelected
                                     ? Theme.of(context).primaryColor
-                                    : Colors.grey[600],
+                                    : Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white70
+                                        : Colors.grey[600],
                                 size: 24,
                               ),
                               if (isExpanded) ...[
@@ -154,7 +160,9 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                                           : FontWeight.normal,
                                       color: isSelected
                                           ? Theme.of(context).primaryColor
-                                          : Colors.grey[700],
+                                            : Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.white
+                                                : Colors.grey[700],
                                     ),
                                   ),
                                 ),
@@ -185,7 +193,9 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                   padding: const EdgeInsets.all(8),
                   child: Icon(
                     isExpanded ? Icons.chevron_left : Icons.chevron_right,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white70
+                        : Colors.grey[600],
                   ),
                 ),
               ),

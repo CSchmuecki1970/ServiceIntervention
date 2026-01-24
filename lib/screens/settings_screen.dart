@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/intervention_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/storage_service.dart';
+import 'create_intervention_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -142,6 +143,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CreateInterventionScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('New Intervention'),
       ),
     );
   }
@@ -335,7 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Data imported successfully!'),
+                      content: Text('Data imported successfully!', style: TextStyle(color: Colors.white)),
                       backgroundColor: Colors.green,
                     ),
                   );
