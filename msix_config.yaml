@@ -1,0 +1,11 @@
+msix_config:
+  display_name: Service Intervention
+  publisher_display_name: Service Intervention
+  identity_name: com.serviceintervention.app
+  publisher: CN=ServiceIntervention
+  msix_version: 1.0.0.0
+  logo_path: windows/runner/resources/app_icon.ico
+  capabilities: internetClient
+  install_certificate: true
+  certificate_path: service_intervention.pfx
+  certificate_password: YourStrongPassword123
