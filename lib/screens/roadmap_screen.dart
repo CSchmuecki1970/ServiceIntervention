@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:io';
 import '../providers/intervention_provider.dart';
@@ -31,6 +30,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
   final Map<String, bool> _isSaved = {};
   final Map<String, DateTime> _lastSaveTime = {};
   final Map<String, String> _listeningText = {};
+  final Map<String, bool> _isReconnecting = {};
 
   @override
   void initState() {
@@ -92,13 +92,25 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
             SnackBar(content: Text('Error: ${error.errorMsg}')),
           );
         },
-        onStatus: (status) {},
+        onStatus: (status) {
+          if (!_isListening || _listeningTaskId.isEmpty) {
+            return;
+          }
+
+          if (status == 'done' || status == 'notListening') {
+            setState(() {
+              _isReconnecting[_listeningTaskId] = true;
+            });
+            _restartListening(_listeningTaskId);
+          }
+        },
       );
 
       if (available) {
         setState(() {
           _isListening = true;
           _listeningTaskId = taskId;
+          _isReconnecting[taskId] = false;
         });
 
         // Store the existing text before starting speech recognition
@@ -113,7 +125,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
             setState(() {
               if (_notesControllers.containsKey(taskId)) {
                 String displayText = accumulatedFinalText;
-                
+
                 if (result.finalResult) {
                   // Append this finalized segment to our accumulated text
                   if (result.recognizedWords.isNotEmpty) {
@@ -124,48 +136,6 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                   }
                   displayText = accumulatedFinalText;
                   _listeningText[taskId] = result.recognizedWords;
-                  
-                  // After finalizing a segment, restart listening to continue
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (_isListening && _listeningTaskId == taskId && mounted && !_speechToText.isListening) {
-                      // Continue listening for more speech
-                      _speechToText.listen(
-                        listenFor: const Duration(minutes: 10),
-                        pauseFor: const Duration(minutes: 5),
-                        partialResults: true,
-                        onResult: (result) {
-                          setState(() {
-                            if (_notesControllers.containsKey(taskId)) {
-                              String displayText = accumulatedFinalText;
-                              
-                              if (result.finalResult) {
-                                // Append this finalized segment to our accumulated text
-                                if (result.recognizedWords.isNotEmpty) {
-                                  if (accumulatedFinalText.isNotEmpty && !accumulatedFinalText.endsWith(' ')) {
-                                    accumulatedFinalText += ' ';
-                                  }
-                                  accumulatedFinalText += result.recognizedWords;
-                                }
-                                displayText = accumulatedFinalText;
-                                _listeningText[taskId] = result.recognizedWords;
-                              } else {
-                                // Interim result - show accumulated final text + current interim
-                                if (result.recognizedWords.isNotEmpty) {
-                                  String interimText = result.recognizedWords;
-                                  if (displayText.isNotEmpty && !displayText.endsWith(' ')) {
-                                    displayText += ' ';
-                                  }
-                                  displayText += interimText;
-                                }
-                              }
-                              
-                              _notesControllers[taskId]!.text = displayText;
-                            }
-                          });
-                        },
-                      );
-                    }
-                  });
                 } else {
                   // Interim result - show accumulated final text + current interim
                   if (result.recognizedWords.isNotEmpty) {
@@ -176,7 +146,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                     displayText += interimText;
                   }
                 }
-                
+
                 _notesControllers[taskId]!.text = displayText;
               }
             });
@@ -186,6 +156,52 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     } else {
       _stopListening();
     }
+  }
+
+  void _restartListening(String taskId) {
+    if (!mounted || !_isListening || _listeningTaskId != taskId) {
+      return;
+    }
+
+    if (_speechToText.isListening) {
+      return;
+    }
+
+    _speechToText.listen(
+      listenFor: const Duration(minutes: 10),
+      pauseFor: const Duration(minutes: 5),
+      partialResults: true,
+      onResult: (result) {
+        if (!mounted || !_notesControllers.containsKey(taskId)) {
+          return;
+        }
+
+        setState(() {
+          _isReconnecting[taskId] = false;
+          final currentText = _notesControllers[taskId]!.text;
+          String displayText = currentText;
+
+          if (result.finalResult) {
+            if (result.recognizedWords.isNotEmpty) {
+              if (displayText.isNotEmpty && !displayText.endsWith(' ')) {
+                displayText += ' ';
+              }
+              displayText += result.recognizedWords;
+            }
+            _listeningText[taskId] = result.recognizedWords;
+          } else {
+            if (result.recognizedWords.isNotEmpty) {
+              if (displayText.isNotEmpty && !displayText.endsWith(' ')) {
+                displayText += ' ';
+              }
+              displayText += result.recognizedWords;
+            }
+          }
+
+          _notesControllers[taskId]!.text = displayText;
+        });
+      },
+    );
   }
 
   void _stopListening() {
@@ -245,6 +261,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     
     setState(() {
       _listeningText.clear();
+      _isReconnecting.clear();
       _isListening = false;
       _listeningTaskId = '';
     });
@@ -589,6 +606,27 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                     : Colors.grey,
                               ),
                               onPressed: (Platform.isAndroid || Platform.isIOS)
+                                    if (_isReconnecting[currentTask.id] == true)
+                                      const Padding(
+                                        padding: EdgeInsets.only(top: 6),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 12,
+                                              height: 12,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Reconnecting…',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.black54,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                   ? () {
                                       if (_isListening && _listeningTaskId == currentTask.id) {
                                         _stopListening();
