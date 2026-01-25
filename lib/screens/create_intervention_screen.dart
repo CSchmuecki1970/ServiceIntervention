@@ -499,7 +499,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
               .map(
                 (currency) => DropdownMenuItem(
                   value: currency.code,
-                  child: Text(CurrencyUtils.labelFor(currency.code)),
+                  child: Text(currency.code),
                 ),
               )
               .toList(),

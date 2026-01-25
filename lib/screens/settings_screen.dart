@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'dart:io';
 import '../providers/intervention_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/storage_service.dart';
 import '../services/export_service.dart';
-import 'package:file_selector/file_selector.dart';
+import 'package:file_picker/file_picker.dart';
 import '../screens/view_archive_screen.dart';
 import 'create_intervention_screen.dart';
 import '../utils/currency_utils.dart';
@@ -161,7 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             .map(
                               (currency) => DropdownMenuItem(
                                 value: currency.code,
-                                child: Text(CurrencyUtils.labelFor(currency.code)),
+                                child: Text(currency.code),
                               ),
                             )
                             .toList(),
@@ -443,28 +444,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showImportDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Import Data'),
         content: const Text('Select a JSON file to import your exported data.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
-                final result = await openFile(acceptedTypeGroups: [XTypeGroup(label: 'json', extensions: ['json'])]);
-                if (result == null) {
+                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['json'],
+                  allowMultiple: false,
+                );
+
+                if (result == null || result.files.isEmpty) {
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No file selected')));
                   return;
                 }
-                final text = await result.readAsString();
+
+                final file = result.files.first;
+                String text;
+
+                if (file.bytes != null) {
+                  text = String.fromCharCodes(file.bytes!);
+                } else if (file.path != null) {
+                  // For mobile platforms, we might need to read from path
+                  final fileObj = File(file.path!);
+                  text = await fileObj.readAsString();
+                } else {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to read file')));
+                  return;
+                }
+
                 final provider = context.read<InterventionProvider>();
                 await provider.importData(text);
+
+                // Check if data was actually imported
+                final interventionCount = provider.interventions.length;
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Data imported successfully!', style: TextStyle(color: Colors.white)),
+                    SnackBar(
+                      content: Text('Data imported successfully! $interventionCount interventions loaded.', style: const TextStyle(color: Colors.white)),
                       backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 3),
                     ),
                   );
                 }

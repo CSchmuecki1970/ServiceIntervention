@@ -444,7 +444,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
               .map(
                 (currency) => DropdownMenuItem(
                   value: currency.code,
-                  child: Text(CurrencyUtils.labelFor(currency.code)),
+                  child: Text(currency.code),
                 ),
               )
               .toList(),
