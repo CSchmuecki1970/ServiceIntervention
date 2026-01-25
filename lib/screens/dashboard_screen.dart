@@ -87,71 +87,145 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          SidebarNavigation(
-            items: navItems,
-            selectedIndex: currentPage.index,
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                AppBar(
-                  title: Text(_getPageTitle(currentPage)),
-                  elevation: 1,
-                  actions: [
-                    if (currentPage != DashboardPage.settings)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Center(
-                          child: Consumer<ThemeProvider>(
-                            builder: (context, themeProvider, child) {
-                              return DropdownButton<AppTheme>(
-                                value: themeProvider.currentTheme,
-                                items: AppTheme.values.map((theme) {
-                                  return DropdownMenuItem(
-                                    value: theme,
-                                    child: Text(_getThemeName(theme)),
-                                  );
-                                }).toList(),
-                                onChanged: (theme) {
-                                  if (theme != null) {
-                                    themeProvider.setTheme(theme);
-                                  }
-                                },
-                                underline: const SizedBox(),
-                                icon: const Icon(Icons.palette),
-                              );
-                            },
+    // Check if we're on a wide screen (tablet/landscape) or narrow screen (mobile/portrait)
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 800; // Tablet breakpoint
+
+    if (isWideScreen) {
+      // Wide screen layout with sidebar
+      return Scaffold(
+        body: Row(
+          children: [
+            SidebarNavigation(
+              items: navItems,
+              selectedIndex: currentPage.index,
+              isExpanded: false,
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  AppBar(
+                    title: Text(_getPageTitle(currentPage)),
+                    elevation: 1,
+                    actions: [
+                      if (currentPage != DashboardPage.settings)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Center(
+                            child: Consumer<ThemeProvider>(
+                              builder: (context, themeProvider, child) {
+                                return DropdownButton<AppTheme>(
+                                  value: themeProvider.currentTheme,
+                                  items: AppTheme.values.map((theme) {
+                                    return DropdownMenuItem(
+                                      value: theme,
+                                      child: Text(_getThemeName(theme)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (theme) {
+                                    if (theme != null) {
+                                      themeProvider.setTheme(theme);
+                                    }
+                                  },
+                                  underline: const SizedBox(),
+                                  icon: const Icon(Icons.palette),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    if (currentPage == DashboardPage.home)
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        tooltip: 'New Intervention',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const CreateInterventionScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-                Expanded(
-                  child: _buildPageContent(context),
-                ),
-              ],
+                      if (currentPage == DashboardPage.home)
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          tooltip: 'New Intervention',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const CreateInterventionScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                  Expanded(
+                    child: _buildPageContent(context),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    } else {
+      // Narrow screen layout with bottom navigation
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(_getPageTitle(currentPage)),
+          elevation: 1,
+          actions: [
+            if (currentPage != DashboardPage.settings)
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Center(
+                  child: Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return DropdownButton<AppTheme>(
+                        value: themeProvider.currentTheme,
+                        items: AppTheme.values.map((theme) {
+                          return DropdownMenuItem(
+                            value: theme,
+                            child: Text(_getThemeName(theme)),
+                          );
+                        }).toList(),
+                        onChanged: (theme) {
+                          if (theme != null) {
+                            themeProvider.setTheme(theme);
+                          }
+                        },
+                        underline: const SizedBox(),
+                        icon: const Icon(Icons.palette),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            if (currentPage == DashboardPage.home)
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'New Intervention',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const CreateInterventionScreen(),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+        body: _buildPageContent(context),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: currentPage.index,
+          onTap: (index) {
+            setState(() {
+              currentPage = DashboardPage.values[index];
+            });
+          },
+          items: navItems.map((item) {
+            return BottomNavigationBarItem(
+              icon: Icon(item.icon),
+              label: item.label,
+            );
+          }).toList(),
+          type: BottomNavigationBarType.fixed,
+        ),
+      );
+    }
   }
 
   Widget _buildPageContent(BuildContext context) {

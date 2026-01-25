@@ -101,67 +101,85 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
           _listeningTaskId = taskId;
         });
 
+        // Store the existing text before starting speech recognition
+        String existingText = _notesControllers[taskId]!.text;
+        String accumulatedFinalText = existingText; // Track all finalized text
+        
         _speechToText.listen(
-          listenFor: const Duration(minutes: 5),
-          pauseFor: const Duration(seconds: 4),
+          listenFor: const Duration(minutes: 10), // Extended listening duration
+          pauseFor: const Duration(minutes: 5), // Very long pause tolerance - 5 minutes
+          partialResults: true,
           onResult: (result) {
             setState(() {
               if (_notesControllers.containsKey(taskId)) {
-                _notesControllers[taskId]!.text = result.recognizedWords;
-                _listeningText[taskId] = result.recognizedWords;
+                String displayText = accumulatedFinalText;
+                
+                if (result.finalResult) {
+                  // Append this finalized segment to our accumulated text
+                  if (result.recognizedWords.isNotEmpty) {
+                    if (accumulatedFinalText.isNotEmpty && !accumulatedFinalText.endsWith(' ')) {
+                      accumulatedFinalText += ' ';
+                    }
+                    accumulatedFinalText += result.recognizedWords;
+                  }
+                  displayText = accumulatedFinalText;
+                  _listeningText[taskId] = result.recognizedWords;
+                  
+                  // After finalizing a segment, restart listening to continue
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (_isListening && _listeningTaskId == taskId && mounted && !_speechToText.isListening) {
+                      // Continue listening for more speech
+                      _speechToText.listen(
+                        listenFor: const Duration(minutes: 10),
+                        pauseFor: const Duration(minutes: 5),
+                        partialResults: true,
+                        onResult: (result) {
+                          setState(() {
+                            if (_notesControllers.containsKey(taskId)) {
+                              String displayText = accumulatedFinalText;
+                              
+                              if (result.finalResult) {
+                                // Append this finalized segment to our accumulated text
+                                if (result.recognizedWords.isNotEmpty) {
+                                  if (accumulatedFinalText.isNotEmpty && !accumulatedFinalText.endsWith(' ')) {
+                                    accumulatedFinalText += ' ';
+                                  }
+                                  accumulatedFinalText += result.recognizedWords;
+                                }
+                                displayText = accumulatedFinalText;
+                                _listeningText[taskId] = result.recognizedWords;
+                              } else {
+                                // Interim result - show accumulated final text + current interim
+                                if (result.recognizedWords.isNotEmpty) {
+                                  String interimText = result.recognizedWords;
+                                  if (displayText.isNotEmpty && !displayText.endsWith(' ')) {
+                                    displayText += ' ';
+                                  }
+                                  displayText += interimText;
+                                }
+                              }
+                              
+                              _notesControllers[taskId]!.text = displayText;
+                            }
+                          });
+                        },
+                      );
+                    }
+                  });
+                } else {
+                  // Interim result - show accumulated final text + current interim
+                  if (result.recognizedWords.isNotEmpty) {
+                    String interimText = result.recognizedWords;
+                    if (displayText.isNotEmpty && !displayText.endsWith(' ')) {
+                      displayText += ' ';
+                    }
+                    displayText += interimText;
+                  }
+                }
+                
+                _notesControllers[taskId]!.text = displayText;
               }
             });
-
-            if (result.finalResult) {
-              // Update the provider with the final text
-              try {
-                Provider.of<InterventionProvider>(context, listen: false)
-                    .updateTaskNotes(widget.interventionId, taskId, result.recognizedWords);
-                
-                // Show save confirmation and visual indicator
-                setState(() {
-                  _isSaved[taskId] = true;
-                  _lastSaveTime[taskId] = DateTime.now();
-                });
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Task notes saved from speech', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                    backgroundColor: Colors.green[600],
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-
-                // Reset save indicator after 3 seconds
-                Future.delayed(const Duration(seconds: 3), () {
-                  if (mounted) {
-                    setState(() {
-                      _isSaved[taskId] = false;
-                    });
-                  }
-                });
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.error, color: Colors.white),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text('Failed to save: ${e.toString()}', style: const TextStyle(color: Colors.white))),
-                      ],
-                    ),
-                    backgroundColor: Colors.red[600],
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-              }
-            }
           },
         );
       }
@@ -172,6 +190,59 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
   void _stopListening() {
     _speechToText.stop();
+    
+    // Save the final text when stopping speech recognition
+    if (_listeningTaskId.isNotEmpty && _notesControllers.containsKey(_listeningTaskId)) {
+      try {
+        String finalText = _notesControllers[_listeningTaskId]!.text;
+        Provider.of<InterventionProvider>(context, listen: false)
+            .updateTaskNotes(widget.interventionId, _listeningTaskId, finalText);
+        
+        // Show save confirmation and visual indicator
+        setState(() {
+          _isSaved[_listeningTaskId] = true;
+          _lastSaveTime[_listeningTaskId] = DateTime.now();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Task notes saved from speech', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Reset save indicator after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _isSaved[_listeningTaskId] = false;
+            });
+          }
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Failed to save: ${e.toString()}', style: const TextStyle(color: Colors.white))),
+              ],
+            ),
+            backgroundColor: Colors.red[600],
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+    
     setState(() {
       _listeningText.clear();
       _isListening = false;
@@ -495,7 +566,9 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                         controller: _notesControllers[currentTask.id],
                         style: const TextStyle(color: Colors.black),
                         decoration: InputDecoration(
-                          hintText: 'Add notes for this task...',
+                          hintText: _isListening && _listeningTaskId == currentTask.id
+                              ? 'Listening... (speech will be appended)'
+                              : 'Add notes for this task...',
                           hintStyle: const TextStyle(color: Colors.grey),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -526,8 +599,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                   : null,
                               tooltip: (Platform.isAndroid || Platform.isIOS)
                                   ? (_isListening && _listeningTaskId == currentTask.id
-                                      ? 'Stop Recording'
-                                      : 'Start Recording')
+                                      ? 'Stop Recording (Text will be appended)'
+                                      : 'Start Recording (Will append to existing text)')
                                   : 'Not available on this platform',
                             ),
                           ),
@@ -543,6 +616,18 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                           );
                         },
                       ),
+                      if (_isListening && _listeningTaskId == currentTask.id)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '🎤 Speech will be appended to existing text',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue[700],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _stopReasonControllers[currentTask.id],

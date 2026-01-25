@@ -246,6 +246,9 @@ class InterventionProvider with ChangeNotifier {
       await StorageService.importFromJson(jsonData);
       loadInterventions();
 
+      // Debug: Check how many interventions were loaded
+      print('DEBUG: Imported data. Total interventions: ${_interventions.length}');
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {

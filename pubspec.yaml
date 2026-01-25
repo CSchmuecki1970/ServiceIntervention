@@ -24,6 +24,7 @@ dependencies:
   archive: ^3.3.0
   open_file: ^3.2.1
   share_plus: ^12.0.1
+  file_picker: ^10.3.8
 
 dev_dependencies:
   flutter_test:
