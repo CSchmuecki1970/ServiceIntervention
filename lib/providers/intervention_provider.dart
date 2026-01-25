@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import '../models/service_intervention.dart';
-import '../models/task.dart';
 import '../services/storage_service.dart';
 
 class InterventionProvider with ChangeNotifier {

@@ -303,7 +303,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
               // Progress indicator - more compact
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Column(
                   children: [
                     Row(
@@ -352,7 +352,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                       // Current task details - more compact
                       Card(
                         elevation: 4,
-                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final padding = constraints.maxWidth < 400 ? 8.0 : 12.0;
@@ -467,11 +467,11 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              const Row(
                                 children: [
-                                  const Icon(Icons.mic, color: Colors.red, size: 16),
-                                  const SizedBox(width: 8),
-                                  const Text(
+                                  Icon(Icons.mic, color: Colors.red, size: 16),
+                                  SizedBox(width: 8),
+                                  Text(
                                     'Listening...',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,

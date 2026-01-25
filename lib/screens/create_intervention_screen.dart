@@ -489,7 +489,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _currencyCode,
+          initialValue: _currencyCode,
           decoration: const InputDecoration(
             labelText: 'Currency',
             border: OutlineInputBorder(),
@@ -553,7 +553,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                 controller: _hotelCostSingleController,
                 decoration: InputDecoration(
                   labelText: 'Single',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
@@ -565,7 +565,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                 controller: _hotelCostDoubleController,
                 decoration: InputDecoration(
                   labelText: 'Double',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
@@ -577,7 +577,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                 controller: _hotelCostSuiteController,
                 decoration: InputDecoration(
                   labelText: 'Suite',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   prefixText: '$currencySymbol ',
                 ),
                 keyboardType: TextInputType.number,
