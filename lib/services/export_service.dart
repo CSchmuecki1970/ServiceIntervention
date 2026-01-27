@@ -48,7 +48,7 @@ class ExportService {
   /// Opens a file picker for a JSON file and returns the decoded JSON object,
   /// or throws if cancelled or invalid.
   static Future<dynamic> importJsonFromFile() async {
-    final typeGroup = XTypeGroup(label: 'json', extensions: ['json']);
+    const typeGroup = XTypeGroup(label: 'json', extensions: ['json']);
     final file = await openFile(acceptedTypeGroups: [typeGroup]);
     if (file == null) throw Exception('No file selected');
     final text = await file.readAsString();
