@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "exportDate": "2026-01-24T21:14:28.999057",
+  "interventions": [
+    {
+      "id": "5c6337cc-3f61-479d-98f3-38f8ed1b28eb",
+      "customer": {
+        "id": "d7c23285-0a6f-48c9-9111-ca53d4a63f4b",
+        "name": "Bosch",
+        "address": "Robert-Bosch-Straße 200\n 31139 Hildesheim",
+        "phone": null,
+        "email": null,
+        "notes": null
+      },
+      "title": "Bosch",
+      "description": "Service intervention Bosch",
+      "scheduledDate": "2026-01-26T11:00:00.000",
+      "tasks": [
+        {
+          "id": "2967e30d-7471-4ded-88be-fd85a0c289fe",
+          "title": "Maschine BM1 Programme anpassen",
+          "description": "Kunde hat Backup nicht (mehr). Evtl. auf PC, oder IPC?",
+          "isCompleted": false,
+          "order": 0,
+          "notes": "Unbedingt auf die Notwendigkeit des Backups hinweisen",
+          "completedAt": null,
+          "isStopped": false,
+          "stopReason": null,
+          "stoppedAt": null
+        },
+        {
+          "id": "ff1df2ad-51b7-4baf-b7e3-0a3100d5820b",
+          "title": "Maschine BM1 Programme anpassen",
+          "description": "Kunde hat Backup nicht (mehr). Evtl. auf PC, oder IPC?",
+          "isCompleted": false,
+          "order": 1,
+          "notes": "Unbedingt auf die Notwendigkeit des Backups hinweisen",
+          "completedAt": null,
+          "isStopped": false,
+          "stopReason": null,
+          "stoppedAt": null
+        },
+        {
+          "id": "b41ac482-d896-48c8-8695-3d79e3afaf3a",
+          "title": "Erstellung eines neuen Programmes auf Basis BM! Sym/Asym für LK3",
+          "description": "Erstellung eines neuen Programmes auf Basis BM! Sym/Asym für LK3",
+          "isCompleted": false,
+          "order": 2,
+          "notes": "Unbedingt auf die Notwendigkeit des Backups hinweisen",
+          "completedAt": null,
+          "isStopped": false,
+          "stopReason": null,
+          "stoppedAt": null
+        },
+        {
+          "id": "23ed6d87-766e-4d82-8d36-96d84aecde5a",
+          "title": "UPIN Anpassung Zeit",
+          "description": "Test, ob ein Zeitserver installiert ist.",
+          "isCompleted": false,
+          "order": 3,
+          "notes": "Zeitserver im In-Sight Vision Suite konfigurieren. Dazu alle Programme entladen, dann die Kameraeinstellungen  (Zeit) anpassen)",
+          "completedAt": null,
+          "isStopped": false,
+          "stopReason": null,
+          "stoppedAt": null
+        }
+      ],
+      "status": "inProgress",
+      "createdAt": "2026-01-24T13:22:22.226",
+      "startedAt": "2026-01-24T13:44:02.534",
+      "completedAt": null,
+      "generalNotes": null,
+      "startDate": "2026-01-24T14:18:23.717",
+      "endDate": "2026-01-25T14:18:23.717",
+      "hotelName": "Gasthof Jörns",
+      "hotelAddress": "Gasthof Jörns GmbH\r\nMarienburger Straße 41\r\n31199 Diekholzen\r\n\r\nTelefon: 0 51 21 / 20 70 – 0\r\nTelefax: 0 51 21 / 20 70 – 90\r\nEmail: service@gasthof-joerns.de",
+      "documents": [],
+      "hotelCostSingle": null,
+      "hotelCostDouble": null,
+      "hotelCostSuite": 95.0,
+      "hotelBreakfastIncluded": true,
+      "hotelRating": 5.0,
+      "involvedPersons": [
+        "Simon Ebeling",
+        "Waldemar Weber",
+        "Christoph Buedenbender",
+        "Lukas Stender",
+        "Fatah"
+      ],
+      "currencyCode": "EUR"
+    }
+  ],
+  "customers": []
+}

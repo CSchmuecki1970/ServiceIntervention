@@ -142,7 +142,8 @@ class InterventionDetailScreen extends StatelessWidget {
                   },
                 ),
               if (intervention.status == InterventionStatus.planned ||
-                  intervention.status == InterventionStatus.inProgress)
+                  intervention.status == InterventionStatus.inProgress ||
+                  intervention.status == InterventionStatus.completed)
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () async {

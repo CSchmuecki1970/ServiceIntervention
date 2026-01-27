@@ -267,6 +267,62 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     });
   }
 
+  /// Manual save function for task notes
+  Future<void> _saveCurrentTaskNotes() async {
+    try {
+      final intervention = Provider.of<InterventionProvider>(context, listen: false)
+          .interventions
+          .firstWhere((i) => i.id == widget.interventionId);
+      
+      final currentTask = intervention.tasks[_currentTaskIndex];
+      final notes = _notesControllers[currentTask.id]?.text ?? '';
+      
+      await Provider.of<InterventionProvider>(context, listen: false)
+          .updateTaskNotes(widget.interventionId, currentTask.id, notes);
+      
+      setState(() {
+        _isSaved[currentTask.id] = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Task notes saved successfully', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          backgroundColor: Colors.green[600],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Reset save indicator after 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _isSaved[currentTask.id] = false;
+          });
+        }
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Failed to save: $e', style: const TextStyle(color: Colors.white))),
+            ],
+          ),
+          backgroundColor: Colors.red[600],
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<InterventionProvider>(
@@ -277,7 +333,11 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         );
 
         _initializeNotesControllers(intervention.tasks);
-        _currentTaskIndex = _getCurrentTaskIndex(intervention);
+        
+        // Initialize _currentTaskIndex only once, don't reset it on every build
+        if (_currentTaskIndex >= intervention.tasks.length) {
+          _currentTaskIndex = intervention.tasks.length - 1;
+        }
 
         if (intervention.tasks.isEmpty) {
           return Scaffold(
@@ -543,6 +603,85 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // Task selector dropdown and save button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _currentTaskIndex,
+                              decoration: InputDecoration(
+                                labelText: 'Select Task',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                prefixIcon: const Icon(Icons.list),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              items: List.generate(
+                                intervention.tasks.length,
+                                (index) => DropdownMenuItem(
+                                  value: index,
+                                  child: SizedBox(
+                                    width: 200,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: intervention.tasks[index].isCompleted
+                                                ? Colors.green[700]
+                                                : intervention.tasks[index].isStopped
+                                                    ? Colors.red[700]
+                                                    : Colors.blue[700],
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '${index + 1}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            intervention.tasks[index].title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _currentTaskIndex = value;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _saveCurrentTaskNotes,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       // Real-time listening display
                       if (_isListening && _listeningTaskId == currentTask.id)
                         Container(
@@ -605,28 +744,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                         : Colors.blue[700])
                                     : Colors.grey,
                               ),
-                              onPressed: (Platform.isAndroid || Platform.isIOS)
-                                    if (_isReconnecting[currentTask.id] == true)
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 6),
-                                        child: Row(
-                                          children: [
-                                            SizedBox(
-                                              width: 12,
-                                              height: 12,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Reconnecting…',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.black54,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                              onPressed: (Platform.isAndroid || Platform.isIOS) && _isReconnecting[currentTask.id] != true
                                   ? () {
                                       if (_isListening && _listeningTaskId == currentTask.id) {
                                         _stopListening();

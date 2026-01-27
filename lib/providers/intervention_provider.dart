@@ -44,7 +44,13 @@ class InterventionProvider with ChangeNotifier {
     try {
       _lastError = null;
       await StorageService.saveIntervention(intervention);
-      loadInterventions();
+      
+      // Update the in-memory list
+      final index = _interventions.indexWhere((i) => i.id == intervention.id);
+      if (index >= 0) {
+        _interventions[index] = intervention;
+      }
+      
       if (_currentIntervention?.id == intervention.id) {
         _currentIntervention = intervention;
       }
@@ -275,7 +281,7 @@ class InterventionProvider with ChangeNotifier {
   List<ServiceIntervention> filterByStatus(InterventionStatus status) {
     try {
       _lastError = null;
-      return StorageService.getInterventionsByStatus(status);
+      return _interventions.where((i) => i.status == status).toList();
     } catch (e) {
       _lastError = e.toString();
       notifyListeners();

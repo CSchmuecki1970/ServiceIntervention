@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/intervention_provider.dart';
+import '../providers/create_intervention_provider.dart';
 import '../models/service_intervention.dart';
 import '../models/customer.dart';
 import '../models/task.dart';
@@ -20,49 +21,63 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   final _formKey = GlobalKey<FormState>();
   late TabController _tabController;
 
-  // Basic Info Controllers
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-
-  // Customer Controllers
-  final _customerNameController = TextEditingController();
-  final _customerAddressController = TextEditingController();
-  final _customerPhoneController = TextEditingController();
-  final _customerEmailController = TextEditingController();
-
-  // Travel Controllers
-  final _hotelNameController = TextEditingController();
-  final _hotelAddressController = TextEditingController();
-  final _hotelCostSingleController = TextEditingController();
-  final _hotelCostDoubleController = TextEditingController();
-  final _hotelCostSuiteController = TextEditingController();
-  final _hotelRatingController = TextEditingController();
-  bool _hotelBreakfastIncluded = false;
-  String _currencyCode = 'EUR';
-
-  // Schedule
-  DateTime _scheduledDate = DateTime.now().add(const Duration(days: 1));
-  DateTime? _startDate;
-  DateTime? _endDate;
-
-  // Tasks
-  final List<Task> _tasks = [];
+  // Controllers for temporary text field management
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _customerNameController;
+  late TextEditingController _customerAddressController;
+  late TextEditingController _customerPhoneController;
+  late TextEditingController _customerEmailController;
+  late TextEditingController _hotelNameController;
+  late TextEditingController _hotelAddressController;
+  late TextEditingController _hotelCostSingleController;
+  late TextEditingController _hotelCostDoubleController;
+  late TextEditingController _hotelCostSuiteController;
+  late TextEditingController _hotelRatingController;
+  late TextEditingController _involvedPersonController;
   final Map<String, TextEditingController> _taskControllers = {};
-
-  // Involved Persons
-  final List<String> _involvedPersons = [];
-  final _involvedPersonController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    
+    // Initialize controllers from provider
+    final createProvider = context.read<CreateInterventionProvider>();
+    
+    _titleController = TextEditingController(text: createProvider.title);
+    _descriptionController = TextEditingController(text: createProvider.description);
+    _customerNameController = TextEditingController(text: createProvider.customerName);
+    _customerAddressController = TextEditingController(text: createProvider.customerAddress);
+    _customerPhoneController = TextEditingController(text: createProvider.customerPhone);
+    _customerEmailController = TextEditingController(text: createProvider.customerEmail);
+    _hotelNameController = TextEditingController(text: createProvider.hotelName);
+    _hotelAddressController = TextEditingController(text: createProvider.hotelAddress);
+    _hotelCostSingleController = TextEditingController(text: createProvider.hotelCostSingle);
+    _hotelCostDoubleController = TextEditingController(text: createProvider.hotelCostDouble);
+    _hotelCostSuiteController = TextEditingController(text: createProvider.hotelCostSuite);
+    _hotelRatingController = TextEditingController(text: createProvider.hotelRating);
+    _involvedPersonController = TextEditingController();
+
+    // Set up listeners to sync with provider
+    _titleController.addListener(() => createProvider.setTitle(_titleController.text));
+    _descriptionController.addListener(() => createProvider.setDescription(_descriptionController.text));
+    _customerNameController.addListener(() => createProvider.setCustomerName(_customerNameController.text));
+    _customerAddressController.addListener(() => createProvider.setCustomerAddress(_customerAddressController.text));
+    _customerPhoneController.addListener(() => createProvider.setCustomerPhone(_customerPhoneController.text));
+    _customerEmailController.addListener(() => createProvider.setCustomerEmail(_customerEmailController.text));
+    _hotelNameController.addListener(() => createProvider.setHotelName(_hotelNameController.text));
+    _hotelAddressController.addListener(() => createProvider.setHotelAddress(_hotelAddressController.text));
+    _hotelCostSingleController.addListener(() => createProvider.setHotelCostSingle(_hotelCostSingleController.text));
+    _hotelCostDoubleController.addListener(() => createProvider.setHotelCostDouble(_hotelCostDoubleController.text));
+    _hotelCostSuiteController.addListener(() => createProvider.setHotelCostSuite(_hotelCostSuiteController.text));
+    _hotelRatingController.addListener(() => createProvider.setHotelRating(_hotelRatingController.text));
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settingsProvider = context.read<SettingsProvider>();
       if (mounted) {
-        setState(() {
-          _currencyCode = settingsProvider.defaultCurrencyCode;
-        });
+        final createProvider = context.read<CreateInterventionProvider>();
+        createProvider.setCurrencyCode(settingsProvider.defaultCurrencyCode);
       }
     });
   }
@@ -90,27 +105,28 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   }
 
   Future<void> _selectDate(BuildContext context) async {
+    final createProvider = context.read<CreateInterventionProvider>();
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _scheduledDate,
+      initialDate: createProvider.scheduledDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) {
       final TimeOfDay? pickedTime = await showTimePicker(
         context: context,
-        initialTime: TimeOfDay.fromDateTime(_scheduledDate),
+        initialTime: TimeOfDay.fromDateTime(createProvider.scheduledDate),
       );
       if (pickedTime != null) {
-        setState(() {
-          _scheduledDate = DateTime(
-            picked.year,
-            picked.month,
-            picked.day,
-            pickedTime.hour,
-            pickedTime.minute,
-          );
-        });
+        final newDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        createProvider.setScheduledDate(newDate);
+        setState(() {});
       }
     }
   }
@@ -120,7 +136,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
       return;
     }
 
-    for (var task in _tasks) {
+    final createProvider = context.read<CreateInterventionProvider>();
+
+    // Validate tasks
+    for (var task in createProvider.tasks) {
       if (_taskControllers[task.id]!.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter all task titles')),
@@ -141,7 +160,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           : _customerEmailController.text.trim(),
     );
 
-    final tasks = _tasks.map((task) {
+    final tasks = createProvider.tasks.map((task) {
       final controller = _taskControllers[task.id]!;
       return task.copyWith(
         title: controller.text.trim(),
@@ -154,11 +173,11 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
       customer: customer,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      scheduledDate: _scheduledDate,
+      scheduledDate: createProvider.scheduledDate,
       tasks: tasks,
       createdAt: DateTime.now(),
-      startDate: _startDate,
-      endDate: _endDate,
+      startDate: createProvider.startDate,
+      endDate: createProvider.endDate,
       hotelName: _hotelNameController.text.trim().isEmpty
           ? null
           : _hotelNameController.text.trim(),
@@ -174,16 +193,19 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
       hotelCostSuite: _hotelCostSuiteController.text.trim().isEmpty
           ? null
           : double.tryParse(_hotelCostSuiteController.text.trim()),
-      hotelBreakfastIncluded: _hotelBreakfastIncluded,
+      hotelBreakfastIncluded: createProvider.hotelBreakfastIncluded,
       hotelRating: _hotelRatingController.text.trim().isEmpty
           ? null
           : double.tryParse(_hotelRatingController.text.trim()),
-      involvedPersons: _involvedPersons,
-      currencyCode: _currencyCode,
+      involvedPersons: createProvider.involvedPersons,
+      currencyCode: createProvider.currencyCode,
     );
 
     final provider = Provider.of<InterventionProvider>(context, listen: false);
     await provider.addIntervention(intervention);
+
+    // Reset the form provider after successful save
+    createProvider.reset();
 
     if (mounted) {
       Navigator.pop(context);
@@ -208,22 +230,27 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           ],
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildBasicInfoTab(),
-            _buildCustomerTab(),
-            _buildTravelTab(),
-            _buildTasksTab(),
-          ],
-        ),
+      body: Consumer<CreateInterventionProvider>(
+        builder: (context, createProvider, _) {
+          return Form(
+            key: _formKey,
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildBasicInfoTab(),
+                _buildCustomerTab(),
+                _buildTravelTab(),
+                _buildTasksTab(),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildBasicInfoTab() {
+    final createProvider = context.read<CreateInterventionProvider>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -277,7 +304,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
               prefixIcon: Icon(Icons.calendar_today),
             ),
             child: Text(
-              '${_scheduledDate.day}/${_scheduledDate.month}/${_scheduledDate.year} at ${_scheduledDate.hour.toString().padLeft(2, '0')}:${_scheduledDate.minute.toString().padLeft(2, '0')}',
+              '${createProvider.scheduledDate.day}/${createProvider.scheduledDate.month}/${createProvider.scheduledDate.year} at ${createProvider.scheduledDate.hour.toString().padLeft(2, '0')}:${createProvider.scheduledDate.minute.toString().padLeft(2, '0')}',
             ),
           ),
         ),
@@ -295,6 +322,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   }
 
   Widget _buildCustomerTab() {
+    final createProvider = context.read<CreateInterventionProvider>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -373,17 +401,18 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           ],
         ),
         const SizedBox(height: 12),
-        if (_involvedPersons.isNotEmpty)
+        if (createProvider.involvedPersons.isNotEmpty)
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _involvedPersons.map((person) {
+            children: createProvider.involvedPersons.asMap().entries.map((entry) {
+              final index = entry.key;
+              final person = entry.value;
               return Chip(
                 label: Text(person),
                 onDeleted: () {
-                  setState(() {
-                    _involvedPersons.remove(person);
-                  });
+                  createProvider.removeInvolvedPerson(index);
+                  setState(() {});
                 },
                 deleteIcon: const Icon(Icons.close, size: 18),
               );
@@ -394,17 +423,18 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   }
 
   void _addInvolvedPerson() {
+    final createProvider = context.read<CreateInterventionProvider>();
     final personName = _involvedPersonController.text.trim();
     if (personName.isNotEmpty) {
-      setState(() {
-        _involvedPersons.add(personName);
-        _involvedPersonController.clear();
-      });
+      createProvider.addInvolvedPerson(personName);
+      _involvedPersonController.clear();
+      setState(() {});
     }
   }
 
   Widget _buildTravelTab() {
-    final currencySymbol = CurrencyUtils.symbolFor(_currencyCode);
+    final createProvider = context.read<CreateInterventionProvider>();
+    final currencySymbol = CurrencyUtils.symbolFor(createProvider.currencyCode);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -423,14 +453,13 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                 onTap: () async {
                   final DateTime? picked = await showDatePicker(
                     context: context,
-                    initialDate: _startDate ?? DateTime.now(),
+                    initialDate: createProvider.startDate ?? DateTime.now(),
                     firstDate: DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    setState(() {
-                      _startDate = picked;
-                    });
+                    createProvider.setStartDate(picked);
+                    setState(() {});
                   }
                 },
                 child: InputDecorator(
@@ -440,9 +469,9 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                     prefixIcon: Icon(Icons.date_range),
                   ),
                   child: Text(
-                    _startDate == null
+                    createProvider.startDate == null
                         ? 'Select date'
-                        : '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}',
+                        : '${createProvider.startDate!.day}/${createProvider.startDate!.month}/${createProvider.startDate!.year}',
                   ),
                 ),
               ),
@@ -453,14 +482,13 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                 onTap: () async {
                   final DateTime? picked = await showDatePicker(
                     context: context,
-                    initialDate: _endDate ?? DateTime.now(),
+                    initialDate: createProvider.endDate ?? DateTime.now(),
                     firstDate: DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    setState(() {
-                      _endDate = picked;
-                    });
+                    createProvider.setEndDate(picked);
+                    setState(() {});
                   }
                 },
                 child: InputDecorator(
@@ -470,9 +498,9 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                     prefixIcon: Icon(Icons.date_range),
                   ),
                   child: Text(
-                    _endDate == null
+                    createProvider.endDate == null
                         ? 'Select date'
-                        : '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+                        : '${createProvider.endDate!.day}/${createProvider.endDate!.month}/${createProvider.endDate!.year}',
                   ),
                 ),
               ),
@@ -489,7 +517,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          initialValue: _currencyCode,
+          initialValue: createProvider.currencyCode,
           decoration: const InputDecoration(
             labelText: 'Currency',
             border: OutlineInputBorder(),
@@ -505,9 +533,8 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
               .toList(),
           onChanged: (value) {
             if (value == null) return;
-            setState(() {
-              _currencyCode = value;
-            });
+            createProvider.setCurrencyCode(value);
+            setState(() {});
           },
         ),
         const SizedBox(height: 24),
@@ -591,11 +618,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
             Expanded(
               child: CheckboxListTile(
                 title: const Text('Breakfast Included'),
-                value: _hotelBreakfastIncluded,
+                value: createProvider.hotelBreakfastIncluded,
                 onChanged: (value) {
-                  setState(() {
-                    _hotelBreakfastIncluded = value ?? false;
-                  });
+                  createProvider.setHotelBreakfastIncluded(value ?? false);
+                  setState(() {});
                 },
                 contentPadding: EdgeInsets.zero,
               ),
@@ -618,6 +644,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
   }
 
   Widget _buildTasksTab() {
+    final createProvider = context.read<CreateInterventionProvider>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -625,24 +652,23 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Tasks (${_tasks.length})',
+              'Tasks (${createProvider.tasks.length})',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             ElevatedButton.icon(
               onPressed: () {
-                setState(() {
-                  final newTask = Task(
-                    id: const Uuid().v4(),
-                    title: '',
-                    description: '',
-                    order: _tasks.length,
-                    isCompleted: false,
-                  );
-                  _tasks.add(newTask);
-                  _taskControllers[newTask.id] = TextEditingController();
-                });
+                final newTask = Task(
+                  id: const Uuid().v4(),
+                  title: '',
+                  description: '',
+                  order: createProvider.tasks.length,
+                  isCompleted: false,
+                );
+                createProvider.addTask(newTask);
+                _taskControllers[newTask.id] = TextEditingController();
+                setState(() {});
               },
               icon: const Icon(Icons.add),
               label: const Text('Add Task'),
@@ -650,7 +676,7 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           ],
         ),
         const SizedBox(height: 16),
-        if (_tasks.isEmpty)
+        if (createProvider.tasks.isEmpty)
           Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -675,8 +701,12 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           )
         else
           Column(
-            children: List.generate(_tasks.length, (index) {
-              final task = _tasks[index];
+            children: List.generate(createProvider.tasks.length, (index) {
+              final task = createProvider.tasks[index];
+              // Ensure controller exists
+              if (!_taskControllers.containsKey(task.id)) {
+                _taskControllers[task.id] = TextEditingController(text: task.title);
+              }
               final controller = _taskControllers[task.id]!;
               return Column(
                 children: [
@@ -698,11 +728,10 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                               IconButton(
                                 icon: const Icon(Icons.delete, color: Colors.red),
                                 onPressed: () {
-                                  setState(() {
-                                    _taskControllers[task.id]!.dispose();
-                                    _taskControllers.remove(task.id);
-                                    _tasks.removeAt(index);
-                                  });
+                                  _taskControllers[task.id]?.dispose();
+                                  _taskControllers.remove(task.id);
+                                  createProvider.removeTask(index);
+                                  setState(() {});
                                 },
                               ),
                             ],

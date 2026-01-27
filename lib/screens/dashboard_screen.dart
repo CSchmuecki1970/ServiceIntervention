@@ -135,9 +135,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                       if (currentPage == DashboardPage.home)
-                        IconButton(
+                        ElevatedButton.icon(
                           icon: const Icon(Icons.add),
-                          tooltip: 'New Intervention',
+                          label: const Text('Add'),
                           onPressed: () {
                             Navigator.push(
                               context,
@@ -193,9 +193,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             if (currentPage == DashboardPage.home)
-              IconButton(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.add),
-                tooltip: 'New Intervention',
+                label: const Text('Add'),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -246,38 +246,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHomeContent(BuildContext context) {
     return Consumer<InterventionProvider>(
       builder: (context, provider, child) {
-        if (provider.lastError != null) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  size: 80,
-                  color: Colors.red,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading data',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    provider.lastError ?? 'Unknown error',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
+        final allInterventions = provider.interventions;
+        final planned = provider.filterByStatus(InterventionStatus.planned);
+        final inProgress = provider.filterByStatus(InterventionStatus.inProgress);
+        final completed = provider.filterByStatus(InterventionStatus.completed);
+        final cancelled = provider.filterByStatus(InterventionStatus.cancelled);
 
-        final interventions = provider.interventions;
+        // Get upcoming interventions (next 7 days, sorted by date)
+        final upcoming = planned
+            .where((i) =>
+                i.scheduledDate.isBefore(DateTime.now().add(Duration(days: 7))))
+            .toList()
+          ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
-        if (interventions.isEmpty) {
+        final dateFormat = DateFormat('MMM dd, yyyy • HH:mm');
+
+        if (allInterventions.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -320,15 +304,232 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         }
 
-        return ListView.builder(
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          itemCount: interventions.length,
-          itemBuilder: (context, index) {
-            final intervention = interventions[index];
-            return _InterventionCard(intervention: intervention);
-          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Overview',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 16),
+
+              // Stats Grid
+              GridView.count(
+                crossAxisCount:
+                    MediaQuery.of(context).size.width > 600 ? 4 : 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                children: [
+                  _buildStatCard(
+                    context,
+                    label: 'Planned',
+                    count: planned.length,
+                    color: Colors.blue,
+                    icon: Icons.schedule,
+                  ),
+                  _buildStatCard(
+                    context,
+                    label: 'In Progress',
+                    count: inProgress.length,
+                    color: Colors.orange,
+                    icon: Icons.work_history,
+                  ),
+                  _buildStatCard(
+                    context,
+                    label: 'Completed',
+                    count: completed.length,
+                    color: Colors.green,
+                    icon: Icons.check_circle,
+                  ),
+                  _buildStatCard(
+                    context,
+                    label: 'Cancelled',
+                    count: cancelled.length,
+                    color: Colors.grey,
+                    icon: Icons.cancel,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Upcoming Section
+              if (upcoming.isNotEmpty) ...[
+                Text(
+                  'Upcoming (Next 7 Days)',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: upcoming.length,
+                  itemBuilder: (context, index) {
+                    final intervention = upcoming[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.blue.withOpacity(0.1),
+                          child: const Icon(Icons.calendar_today,
+                              color: Colors.blue),
+                        ),
+                        title: Text(intervention.title),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(intervention.customer.name),
+                            Text(
+                              dateFormat.format(intervention.scheduledDate),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  InterventionDetailScreen(
+                                interventionId: intervention.id,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // Quick Links
+              Text(
+                'Quick Actions',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _buildQuickActionButton(
+                    context,
+                    label: 'View Planned',
+                    count: planned.length,
+                    color: Colors.blue,
+                    onTap: () {
+                      setState(() {
+                        currentPage = DashboardPage.planned;
+                      });
+                    },
+                  ),
+                  _buildQuickActionButton(
+                    context,
+                    label: 'View In Progress',
+                    count: inProgress.length,
+                    color: Colors.orange,
+                    onTap: () {
+                      setState(() {
+                        currentPage = DashboardPage.inProgress;
+                      });
+                    },
+                  ),
+                  _buildQuickActionButton(
+                    context,
+                    label: 'View Completed',
+                    count: completed.length,
+                    color: Colors.green,
+                    onTap: () {
+                      setState(() {
+                        currentPage = DashboardPage.completed;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildStatCard(
+    BuildContext context, {
+    required String label,
+    required int count,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Card(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color.withOpacity(0.1),
+              color.withOpacity(0.05),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                count.toString(),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton(
+    BuildContext context, {
+    required String label,
+    required int count,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color.withOpacity(0.1),
+        foregroundColor: color,
+        side: BorderSide(color: color),
+      ),
+      child: Text('$label ($count)'),
     );
   }
 
@@ -367,7 +568,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           itemCount: filteredInterventions.length,
           itemBuilder: (context, index) {
             final intervention = filteredInterventions[index];
-            return _InterventionCard(intervention: intervention);
+            return _InterventionCard(
+              intervention: intervention,
+              provider: provider,
+            );
           },
         );
       },
@@ -413,8 +617,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _InterventionCard extends StatelessWidget {
   final ServiceIntervention intervention;
+  final InterventionProvider provider;
 
-  const _InterventionCard({required this.intervention});
+  const _InterventionCard({
+    required this.intervention,
+    required this.provider,
+  });
 
   Color _getStatusColor(InterventionStatus status) {
     switch (status) {
@@ -447,7 +655,7 @@ class _InterventionCard extends StatelessWidget {
     final dateFormat = DateFormat('MMM dd, yyyy • HH:mm');
     final statusColor = _getStatusColor(intervention.status);
 
-    return Card(
+    final cardWidget = Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: () {
@@ -494,6 +702,50 @@ class _InterventionCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                  PopupMenuButton<InterventionStatus>(
+                    onSelected: (newStatus) async {
+                      final updated = intervention.copyWith(status: newStatus);
+                      await provider.updateIntervention(updated);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Moved "${intervention.title}" to ${newStatus.name}',
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    itemBuilder: (context) {
+                      final availableStatuses = InterventionStatus.values
+                          .where((status) => status != intervention.status)
+                          .toList();
+
+                      return [
+                        PopupMenuItem<InterventionStatus>(
+                          enabled: false,
+                          child: Text(
+                            'Move to:',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                        PopupMenuDivider(),
+                        ...availableStatuses.map((status) {
+                          return PopupMenuItem<InterventionStatus>(
+                            value: status,
+                            child: Text(_getStatusText(status)),
+                          );
+                        }),
+                      ];
+                    },
+                    icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -565,6 +817,61 @@ class _InterventionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        _showMoveContextMenu(context, details.globalPosition);
+      },
+      child: cardWidget,
+    );
+  }
+
+  void _showMoveContextMenu(BuildContext context, Offset position) {
+    final availableStatuses = InterventionStatus.values
+        .where((status) => status != intervention.status)
+        .toList();
+
+    showMenu<InterventionStatus>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: [
+        PopupMenuItem<InterventionStatus>(
+          enabled: false,
+          child: Text(
+            'Move to:',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+        PopupMenuDivider(),
+        ...availableStatuses.map((status) {
+          return PopupMenuItem<InterventionStatus>(
+            value: status,
+            onTap: () async {
+              final updated = intervention.copyWith(status: status);
+              await provider.updateIntervention(updated);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Moved "${intervention.title}" to ${status.name}',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: Text(_getStatusText(status)),
+          );
+        }),
+      ],
     );
   }
 }

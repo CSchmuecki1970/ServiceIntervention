@@ -401,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Export Data'),
-          content: const Text('Save your data to a JSON file in the documents folder?'),
+          content: const Text('Save your data to a JSON file in the Downloads folder? You can access this file through your device\'s file manager.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(

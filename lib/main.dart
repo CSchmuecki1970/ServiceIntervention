@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'providers/intervention_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/create_intervention_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/storage_service.dart';
 
@@ -24,6 +25,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => InterventionProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => CreateInterventionProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

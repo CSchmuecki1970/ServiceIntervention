@@ -159,6 +159,7 @@ class _SidebarNavigationState extends State<SidebarNavigation> {
                                 : null,
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 item.icon,
