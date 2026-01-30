@@ -486,11 +486,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                             child: InputDecorator(
                               decoration: InputDecoration(
                                 labelText: 'Started At',
-                                border: OutlineInputBorder(),
+                                border: const OutlineInputBorder(),
                                 prefixIcon: Icon(Icons.play_arrow, color: Colors.blue[700]),
                                 suffixIcon: _startedAt != null
                                     ? IconButton(
-                                        icon: Icon(Icons.clear, size: 18),
+                                        icon: const Icon(Icons.clear, size: 18),
                                         onPressed: () {
                                           setState(() {
                                             _startedAt = null;
@@ -551,11 +551,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                             child: InputDecorator(
                               decoration: InputDecoration(
                                 labelText: 'Completed At',
-                                border: OutlineInputBorder(),
+                                border: const OutlineInputBorder(),
                                 prefixIcon: Icon(Icons.check_circle, color: Colors.green[700]),
                                 suffixIcon: _completedAt != null
                                     ? IconButton(
-                                        icon: Icon(Icons.clear, size: 18),
+                                        icon: const Icon(Icons.clear, size: 18),
                                         onPressed: () {
                                           setState(() {
                                             _completedAt = null;
@@ -1285,11 +1285,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                                       child: InputDecorator(
                                         decoration: InputDecoration(
                                           labelText: 'Completed At',
-                                          border: OutlineInputBorder(),
+                                          border: const OutlineInputBorder(),
                                           prefixIcon: Icon(Icons.check_circle, size: 18, color: Colors.green[700]),
                                           suffixIcon: _taskCompletedAt[task.id] != null
                                               ? IconButton(
-                                                  icon: Icon(Icons.clear, size: 16),
+                                                  icon: const Icon(Icons.clear, size: 16),
                                                   onPressed: () {
                                                     setState(() {
                                                       _taskCompletedAt[task.id] = null;
@@ -1345,11 +1345,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                                       child: InputDecorator(
                                         decoration: InputDecoration(
                                           labelText: 'Stopped At',
-                                          border: OutlineInputBorder(),
+                                          border: const OutlineInputBorder(),
                                           prefixIcon: Icon(Icons.block, size: 18, color: Colors.red[700]),
                                           suffixIcon: _taskStoppedAt[task.id] != null
                                               ? IconButton(
-                                                  icon: Icon(Icons.clear, size: 16),
+                                                  icon: const Icon(Icons.clear, size: 16),
                                                   onPressed: () {
                                                     setState(() {
                                                       _taskStoppedAt[task.id] = null;
