@@ -367,6 +367,11 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                     } else {
                       file = await ReportService.exportReportAsText(intervention);
                     }
+                    final fileName = file.path.split('/').last;
+                    final isAndroid = Platform.isAndroid;
+                    final locationMessage = isAndroid 
+                        ? 'Downloads folder' 
+                        : file.path;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Row(
@@ -374,12 +379,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                             const Icon(Icons.check_circle, color: Colors.white),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text('${value.toUpperCase()} report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                              child: Text(
+                                isAndroid 
+                                    ? '${value.toUpperCase()} report saved to Downloads: $fileName'
+                                    : '${value.toUpperCase()} report saved to: $locationMessage',
+                                style: const TextStyle(color: Colors.white),
+                              ),
                             ),
                           ],
                         ),
                         backgroundColor: Colors.green[600],
-                        duration: const Duration(seconds: 3),
+                        duration: const Duration(seconds: 4),
                       ),
                     );
                   } catch (e) {
@@ -608,7 +618,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<int>(
-                              value: _currentTaskIndex,
+                              initialValue: _currentTaskIndex,
+                              isExpanded: true,
                               decoration: InputDecoration(
                                 labelText: 'Select Task',
                                 border: OutlineInputBorder(
@@ -621,43 +632,40 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                 intervention.tasks.length,
                                 (index) => DropdownMenuItem(
                                   value: index,
-                                  child: SizedBox(
-                                    width: 200,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 24,
-                                          height: 24,
-                                          decoration: BoxDecoration(
-                                            color: intervention.tasks[index].isCompleted
-                                                ? Colors.green[700]
-                                                : intervention.tasks[index].isStopped
-                                                    ? Colors.red[700]
-                                                    : Colors.blue[700],
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              '${index + 1}',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: BoxDecoration(
+                                          color: intervention.tasks[index].isCompleted
+                                              ? Colors.green[700]
+                                              : intervention.tasks[index].isStopped
+                                                  ? Colors.red[700]
+                                                  : Colors.blue[700],
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            intervention.tasks[index].title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          intervention.tasks[index].title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -763,6 +771,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                         ),
                         maxLines: 8,
                         minLines: 6,
+                        enabled: true, // Always allow editing notes, even for completed tasks
                         onChanged: (value) {
                           final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
                           currentProvider.updateTaskNotes(
@@ -845,6 +854,35 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                           ),
                         ),
                       ),
+                      // Reopen task button for completed interventions
+                      if (intervention.status == InterventionStatus.completed && currentTask.isCompleted)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final currentProvider = Provider.of<InterventionProvider>(context, listen: false);
+                                await currentProvider.reopenTask(
+                                  widget.interventionId,
+                                  currentTask.id,
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Task reopened. You can now add more information.'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Reopen Task'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blue[700],
+                                side: BorderSide(color: Colors.blue[700]!),
+                              ),
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 24),
 
                       // Navigation buttons
@@ -993,6 +1031,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                       onPressed: () async {
                                         try {
                                           final file = await ReportService.exportReportAsPdf(intervention);
+                                          final fileName = file.path.split('/').last;
+                                          final isAndroid = Platform.isAndroid;
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
                                               content: Row(
@@ -1000,12 +1040,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                                   const Icon(Icons.check_circle, color: Colors.white),
                                                   const SizedBox(width: 12),
                                                   Expanded(
-                                                    child: Text('PDF report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                                                    child: Text(
+                                                      isAndroid
+                                                          ? 'PDF report saved to Downloads: $fileName'
+                                                          : 'PDF report saved to: ${file.path}',
+                                                      style: const TextStyle(color: Colors.white),
+                                                    ),
                                                   ),
                                                 ],
                                               ),
                                               backgroundColor: Colors.green[600],
-                                              duration: const Duration(seconds: 3),
+                                              duration: const Duration(seconds: 4),
                                             ),
                                           );
                                         } catch (e) {
@@ -1030,6 +1075,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                       onPressed: () async {
                                         try {
                                           final file = await ReportService.exportReportAsText(intervention);
+                                          final fileName = file.path.split('/').last;
+                                          final isAndroid = Platform.isAndroid;
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
                                               content: Row(
@@ -1037,12 +1084,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                                                   const Icon(Icons.check_circle, color: Colors.white),
                                                   const SizedBox(width: 12),
                                                   Expanded(
-                                                    child: Text('Text report saved to: ${file.path}', style: const TextStyle(color: Colors.white)),
+                                                    child: Text(
+                                                      isAndroid
+                                                          ? 'Text report saved to Downloads: $fileName'
+                                                          : 'Text report saved to: ${file.path}',
+                                                      style: const TextStyle(color: Colors.white),
+                                                    ),
                                                   ),
                                                 ],
                                               ),
                                               backgroundColor: Colors.green[600],
-                                              duration: const Duration(seconds: 3),
+                                              duration: const Duration(seconds: 4),
                                             ),
                                           );
                                         } catch (e) {

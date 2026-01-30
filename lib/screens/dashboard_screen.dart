@@ -255,7 +255,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Get upcoming interventions (next 7 days, sorted by date)
         final upcoming = planned
             .where((i) =>
-                i.scheduledDate.isBefore(DateTime.now().add(Duration(days: 7))))
+                i.scheduledDate.isBefore(DateTime.now().add(const Duration(days: 7))))
             .toList()
           ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
@@ -610,7 +610,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case AppTheme.pink:
         return 'Pink';
       case AppTheme.dracula:
-        return 'Dracula';
+        return 'Darkula';
     }
   }
 }
@@ -736,7 +736,7 @@ class _InterventionCard extends StatelessWidget {
                                 ),
                           ),
                         ),
-                        PopupMenuDivider(),
+                        const PopupMenuDivider(),
                         ...availableStatuses.map((status) {
                           return PopupMenuItem<InterventionStatus>(
                             value: status,
@@ -850,7 +850,7 @@ class _InterventionCard extends StatelessWidget {
                 ),
           ),
         ),
-        PopupMenuDivider(),
+        const PopupMenuDivider(),
         ...availableStatuses.map((status) {
           return PopupMenuItem<InterventionStatus>(
             value: status,

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/intervention_provider.dart';
 import '../models/service_intervention.dart';
+import '../models/task.dart';
 import 'roadmap_screen.dart';
 import 'edit_intervention_screen.dart';
 import 'report_preview_screen.dart';
@@ -10,7 +11,6 @@ import '../utils/currency_utils.dart';
 import '../services/archive_service.dart';
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 
 class InterventionDetailScreen extends StatelessWidget {
   final String interventionId;
@@ -189,7 +189,7 @@ class InterventionDetailScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 _CustomerCard(intervention: intervention),
                 const SizedBox(height: 16),
-                _ScheduleCard(intervention: intervention),
+                _ScheduleCard(intervention: intervention, provider: provider),
                 const SizedBox(height: 16),
                 if (intervention.involvedPersons.isNotEmpty)
                   _InvolvedPersonsCard(intervention: intervention),
@@ -261,10 +261,17 @@ class InterventionDetailScreen extends StatelessWidget {
     } else if (intervention.status == InterventionStatus.completed) {
       return FloatingActionButton.extended(
         onPressed: () {
-          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RoadmapScreen(
+                interventionId: intervention.id,
+              ),
+            ),
+          );
         },
-        icon: const Icon(Icons.home),
-        label: const Text('Back to Home'),
+        icon: const Icon(Icons.route),
+        label: const Text('View Roadmap'),
       );
     }
     return null;
@@ -446,15 +453,62 @@ class _CustomerCard extends StatelessWidget {
   }
 }
 
-class _ScheduleCard extends StatelessWidget {
+class _ScheduleCard extends StatefulWidget {
   final ServiceIntervention intervention;
+  final InterventionProvider provider;
 
-  const _ScheduleCard({required this.intervention});
+  const _ScheduleCard({
+    required this.intervention,
+    required this.provider,
+  });
+
+  @override
+  State<_ScheduleCard> createState() => _ScheduleCardState();
+}
+
+class _ScheduleCardState extends State<_ScheduleCard> {
+  bool _isEditingTimestamps = false;
+
+  Future<void> _editTimestamp(
+    String label,
+    DateTime? currentValue,
+    Function(DateTime?) onSave,
+  ) async {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: currentValue ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: currentValue != null
+            ? TimeOfDay.fromDateTime(currentValue)
+            : TimeOfDay.now(),
+      );
+      if (pickedTime != null) {
+        final newDate = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        await onSave(newDate);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('EEEE, MMMM dd, yyyy');
     final timeFormat = DateFormat('HH:mm');
+    final timestampFormat = DateFormat('dd/MM/yyyy HH:mm');
+    final showEditButton = widget.intervention.status == InterventionStatus.completed ||
+        widget.intervention.status == InterventionStatus.inProgress;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -465,25 +519,435 @@ class _ScheduleCard extends StatelessWidget {
               children: [
                 Icon(Icons.calendar_today, color: Colors.blue[700]),
                 const SizedBox(width: 8),
-                Text(
-                  'Planned Information',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                Expanded(
+                  child: Text(
+                    'Planned Information',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
+                if (showEditButton)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isEditingTimestamps = !_isEditingTimestamps;
+                      });
+                    },
+                    icon: Icon(
+                      _isEditingTimestamps ? Icons.close : Icons.edit,
+                      size: 18,
+                    ),
+                    label: Text(_isEditingTimestamps ? 'Close' : 'Edit'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
             Text(
-              dateFormat.format(intervention.scheduledDate),
+              dateFormat.format(widget.intervention.scheduledDate),
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             Text(
-              'at ${timeFormat.format(intervention.scheduledDate)}',
+              'at ${timeFormat.format(widget.intervention.scheduledDate)}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),
             ),
+            // Editing section (shown when Edit button is clicked)
+            if (_isEditingTimestamps && showEditButton) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Planned Date editing
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Planned Date',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: widget.intervention.scheduledDate,
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (pickedDate != null) {
+                          final TimeOfDay? pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(widget.intervention.scheduledDate),
+                          );
+                          if (pickedTime != null) {
+                            final newDate = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                            final updated = widget.intervention.copyWith(scheduledDate: newDate);
+                            await widget.provider.updateIntervention(updated);
+                          }
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.event,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Planned Date & Time',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    timestampFormat.format(widget.intervention.scheduledDate),
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.edit,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Intervention Timestamps',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (widget.intervention.startedAt != null ||
+                        widget.intervention.status == InterventionStatus.inProgress ||
+                        widget.intervention.status == InterventionStatus.completed)
+                      InkWell(
+                        onTap: () async {
+                          await _editTimestamp(
+                            'Started At',
+                            widget.intervention.startedAt,
+                            (newDate) async {
+                              final updated = widget.intervention.copyWith(startedAt: newDate);
+                              await widget.provider.updateIntervention(updated);
+                            },
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.play_arrow,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Started At',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.intervention.startedAt != null
+                                          ? timestampFormat.format(widget.intervention.startedAt!)
+                                          : 'Tap to set',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.edit,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (widget.intervention.status == InterventionStatus.completed) ...[
+                      if (widget.intervention.startedAt != null) const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          await _editTimestamp(
+                            'Completed At',
+                            widget.intervention.completedAt,
+                            (newDate) async {
+                              final updated = widget.intervention.copyWith(completedAt: newDate);
+                              await widget.provider.updateIntervention(updated);
+                            },
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color: Colors.green[700],
+                                size: 18,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Completed At',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.intervention.completedAt != null
+                                          ? timestampFormat.format(widget.intervention.completedAt!)
+                                          : 'Tap to set',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.edit,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    // Travel dates editing
+                    if (widget.intervention.startDate != null || widget.intervention.endDate != null) ...[
+                      const SizedBox(height: 16),
+                      Divider(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.date_range,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Travel Dates',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (widget.intervention.startDate != null)
+                        InkWell(
+                          onTap: () async {
+                            final DateTime? pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: widget.intervention.startDate!,
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (pickedDate != null) {
+                              final TimeOfDay? pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(widget.intervention.startDate!),
+                              );
+                              if (pickedTime != null) {
+                                final newDate = DateTime(
+                                  pickedDate.year,
+                                  pickedDate.month,
+                                  pickedDate.day,
+                                  pickedTime.hour,
+                                  pickedTime.minute,
+                                );
+                                final updated = widget.intervention.copyWith(startDate: newDate);
+                                await widget.provider.updateIntervention(updated);
+                              }
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_forward,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'From Date',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        timestampFormat.format(widget.intervention.startDate!),
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (widget.intervention.endDate != null) ...[
+                        if (widget.intervention.startDate != null) const SizedBox(height: 8),
+                        InkWell(
+                          onTap: () async {
+                            final DateTime? pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: widget.intervention.endDate!,
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (pickedDate != null) {
+                              final TimeOfDay? pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(widget.intervention.endDate!),
+                              );
+                              if (pickedTime != null) {
+                                final newDate = DateTime(
+                                  pickedDate.year,
+                                  pickedDate.month,
+                                  pickedDate.day,
+                                  pickedTime.hour,
+                                  pickedTime.minute,
+                                );
+                                final updated = widget.intervention.copyWith(endDate: newDate);
+                                await widget.provider.updateIntervention(updated);
+                              }
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_back,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'To Date',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        timestampFormat.format(widget.intervention.endDate!),
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -496,92 +960,215 @@ class _TasksCard extends StatelessWidget {
 
   const _TasksCard({required this.intervention});
 
+  Future<void> _editTaskTimestamp(
+    BuildContext context,
+    ServiceIntervention intervention,
+    Task task,
+    String label,
+    DateTime? currentValue,
+    InterventionProvider provider,
+  ) async {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: currentValue ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: currentValue != null
+            ? TimeOfDay.fromDateTime(currentValue)
+            : TimeOfDay.now(),
+      );
+      if (pickedTime != null) {
+        final newDate = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        final updatedTasks = intervention.tasks.map((t) {
+          if (t.id == task.id) {
+            if (label == 'Completed At') {
+              return t.copyWith(completedAt: newDate);
+            } else {
+              return t.copyWith(stoppedAt: newDate);
+            }
+          }
+          return t;
+        }).toList();
+        final updated = intervention.copyWith(tasks: updatedTasks);
+        await provider.updateIntervention(updated);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    return Consumer<InterventionProvider>(
+      builder: (context, provider, child) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.checklist, color: Colors.blue[700]),
-                const SizedBox(width: 8),
-                Text(
-                  'Tasks (${intervention.tasks.length})',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...intervention.tasks.map((task) {
-              final isStopped = task.isStopped;
-              final isCompleted = task.isCompleted;
-              final statusColor = isStopped
-                  ? Colors.red
-                  : isCompleted
-                      ? Colors.green
-                      : Colors.grey[300];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
+                Row(
                   children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: statusColor,
-                        border: Border.all(
-                          color: isStopped
-                              ? Colors.red[700]!
-                              : isCompleted
-                                  ? Colors.green
-                                  : Colors.grey[400]!,
-                          width: 2,
-                        ),
-                      ),
-                      child: isStopped
-                          ? const Icon(Icons.block, size: 16, color: Colors.white)
-                          : isCompleted
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                )
-                              : null,
+                    Icon(Icons.checklist, color: Colors.blue[700]),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Tasks (${intervention.tasks.length})',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '${task.order + 1}. ${task.title}',
-                        style: TextStyle(
-                          decoration: isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isStopped
-                              ? Colors.red[700]
-                              : isCompleted
-                                  ? Colors.grey[600]
-                                  : null,
-                        ),
-                      ),
-                    ),
-                    if (isStopped)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Icon(Icons.block, color: Colors.red[700], size: 18),
-                      ),
                   ],
                 ),
-              );
-            }),
-          ],
-        ),
-      ),
+                const SizedBox(height: 12),
+                ...intervention.tasks.map((task) {
+                  final isStopped = task.isStopped;
+                  final isCompleted = task.isCompleted;
+                  final statusColor = isStopped
+                      ? Colors.red
+                      : isCompleted
+                          ? Colors.green
+                          : Colors.grey[300];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: statusColor,
+                                border: Border.all(
+                                  color: isStopped
+                                      ? Colors.red[700]!
+                                      : isCompleted
+                                          ? Colors.green
+                                          : Colors.grey[400]!,
+                                  width: 2,
+                                ),
+                              ),
+                              child: isStopped
+                                  ? const Icon(Icons.block, size: 16, color: Colors.white)
+                                  : isCompleted
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${task.order + 1}. ${task.title}',
+                                style: TextStyle(
+                                  decoration: isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: isStopped
+                                      ? Colors.red[700]
+                                      : isCompleted
+                                          ? Colors.grey[600]
+                                          : null,
+                                ),
+                              ),
+                            ),
+                            if (isStopped)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Icon(Icons.block, color: Colors.red[700], size: 18),
+                              ),
+                          ],
+                        ),
+                        // Task timestamps for completed/stopped tasks
+                        if ((isCompleted || isStopped) && 
+                            (task.completedAt != null || task.stoppedAt != null))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36, top: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (isCompleted && task.completedAt != null)
+                                  InkWell(
+                                    onTap: () => _editTaskTimestamp(
+                                      context,
+                                      intervention,
+                                      task,
+                                      'Completed At',
+                                      task.completedAt,
+                                      provider,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.check_circle, size: 14, color: Colors.green[700]),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Completed: ${dateFormat.format(task.completedAt!)}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: Colors.grey[700],
+                                                ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.edit, size: 12, color: Colors.grey[600]),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (isStopped && task.stoppedAt != null)
+                                  InkWell(
+                                    onTap: () => _editTaskTimestamp(
+                                      context,
+                                      intervention,
+                                      task,
+                                      'Stopped At',
+                                      task.stoppedAt,
+                                      provider,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.block, size: 14, color: Colors.red[700]),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Stopped: ${dateFormat.format(task.stoppedAt!)}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: Colors.grey[700],
+                                                ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.edit, size: 12, color: Colors.grey[600]),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

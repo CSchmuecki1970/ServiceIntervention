@@ -160,7 +160,7 @@ class HomeScreen extends StatelessWidget {
       case AppTheme.pink:
         return 'Pink';
       case AppTheme.dracula:
-        return 'Dracula';
+        return 'Darkula';
     }
   }
 }

@@ -2,7 +2,11 @@ pluginManagement {
     val flutterSdkPath =
         run {
             val properties = java.util.Properties()
-            file("local.properties").inputStream().use { properties.load(it) }
+            file("local.properties").inputStream().use { input ->
+                java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8).use { reader ->
+                    properties.load(reader)
+                }
+            }
             val flutterSdkPath = properties.getProperty("flutter.sdk")
             require(flutterSdkPath != null) { "flutter.sdk not set in local.properties" }
             flutterSdkPath
@@ -14,6 +18,9 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven {
+            url = uri("https://repo1.maven.org/maven2/")
+        }
     }
 }
 

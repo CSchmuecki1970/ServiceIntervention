@@ -104,12 +104,42 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
     super.dispose();
   }
 
+  Future<bool> _confirmPastDate(DateTime date, String dateLabel) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDay = DateTime(date.year, date.month, date.day);
+    
+    if (selectedDay.isBefore(today)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Past Date Selected'),
+          content: Text(
+            'This date ($dateLabel) is in the past. Are you sure you want to use this date?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes, Use This Date'),
+            ),
+          ],
+        ),
+      );
+      return confirmed ?? false;
+    }
+    return true;
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final createProvider = context.read<CreateInterventionProvider>();
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: createProvider.scheduledDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) {
@@ -125,8 +155,11 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
           pickedTime.hour,
           pickedTime.minute,
         );
-        createProvider.setScheduledDate(newDate);
-        setState(() {});
+        final confirmed = await _confirmPastDate(newDate, 'Planned Date');
+        if (confirmed) {
+          createProvider.setScheduledDate(newDate);
+          setState(() {});
+        }
       }
     }
   }
@@ -458,8 +491,11 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    createProvider.setStartDate(picked);
-                    setState(() {});
+                    final confirmed = await _confirmPastDate(picked, 'From Date');
+                    if (confirmed) {
+                      createProvider.setStartDate(picked);
+                      setState(() {});
+                    }
                   }
                 },
                 child: InputDecorator(
@@ -487,8 +523,11 @@ class _CreateInterventionScreenState extends State<CreateInterventionScreen>
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    createProvider.setEndDate(picked);
-                    setState(() {});
+                    final confirmed = await _confirmPastDate(picked, 'To Date');
+                    if (confirmed) {
+                      createProvider.setEndDate(picked);
+                      setState(() {});
+                    }
                   }
                 },
                 child: InputDecorator(

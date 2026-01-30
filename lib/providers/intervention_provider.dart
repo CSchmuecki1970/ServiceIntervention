@@ -230,6 +230,39 @@ class InterventionProvider with ChangeNotifier {
     }
   }
 
+  Future<void> reopenTask(String interventionId, String taskId) async {
+    try {
+      _lastError = null;
+      final intervention = StorageService.getIntervention(interventionId);
+      if (intervention != null) {
+        final updatedTasks = intervention.tasks.map((task) {
+          if (task.id == taskId) {
+            return task.copyWith(
+              isCompleted: false,
+              completedAt: null,
+              isStopped: false,
+              stopReason: null,
+              stoppedAt: null,
+            );
+          }
+          return task;
+        }).toList();
+
+        final updated = intervention.copyWith(
+          tasks: updatedTasks,
+          // If intervention was completed but we're reopening a task, set status back to inProgress
+          status: intervention.status == InterventionStatus.completed
+              ? InterventionStatus.inProgress
+              : intervention.status,
+        );
+        await updateIntervention(updated);
+      }
+    } catch (e) {
+      _lastError = e.toString();
+      notifyListeners();
+    }
+  }
+
   // Export functionality
   String exportData() {
     try {

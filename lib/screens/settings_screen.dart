@@ -389,7 +389,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case AppTheme.pink:
         return 'Pink';
       case AppTheme.dracula:
-        return 'Dracula';
+        return 'Darkula';
     }
   }
 

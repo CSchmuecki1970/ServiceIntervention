@@ -4,12 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:archive/archive.dart';
 import 'package:printing/printing.dart';
-import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 
 class ViewArchiveScreen extends StatefulWidget {
   const ViewArchiveScreen({super.key});
@@ -24,7 +22,7 @@ class _ViewArchiveScreenState extends State<ViewArchiveScreen> {
 
   Future<void> _pickArchive() async {
     try {
-      final result = await openFile(acceptedTypeGroups: [XTypeGroup(label: 'zip', extensions: ['zip'])]);
+      final result = await openFile(acceptedTypeGroups: [const XTypeGroup(label: 'zip', extensions: ['zip'])]);
       if (result == null) return;
       final bytes = await result.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);

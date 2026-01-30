@@ -28,3 +28,16 @@
 If you encounter errors about missing `.g.dart` files, make sure you've run the build_runner command above.
 
 If you get Hive adapter registration errors, ensure all model files have the `@HiveType` and `@HiveField` annotations properly set up (which they already do).
+
+## Windows Installer (Inno Setup)
+
+1. Install Inno Setup 6 (default path: `C:\Program Files (x86)\Inno Setup 6`).
+2. Build the installer:
+   ```powershell
+   installer\build_installer.ps1
+   ```
+   or
+   ```bat
+   installer\build_installer.bat
+   ```
+3. Optional: set `INNO_SETUP_PATH` to your Inno Setup folder or full `ISCC.exe` path to override the default.

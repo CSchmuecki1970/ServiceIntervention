@@ -9,6 +9,46 @@ import '../models/service_intervention.dart';
 import '../utils/currency_utils.dart';
 import 'settings_service.dart';
 
+/// Gets an accessible directory for saving files
+/// On Android: Uses Downloads folder (accessible via file manager)
+/// On other platforms: Uses application documents directory
+Future<String> _getAccessibleDirectory() async {
+  if (Platform.isAndroid) {
+    try {
+      // On Android, try to use the public Downloads folder
+      // This path works on most Android devices
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      if (await downloadDir.exists()) {
+        return downloadDir.path;
+      }
+      // Try to create it if it doesn't exist
+      try {
+        await downloadDir.create(recursive: true);
+        return downloadDir.path;
+      } catch (e) {
+        // If we can't access Downloads, fall back to external storage
+        final externalDir = await getExternalStorageDirectory();
+        if (externalDir != null) {
+          return externalDir.path;
+        }
+      }
+    } catch (e) {
+      // Fallback to external storage directory
+      final externalDir = await getExternalStorageDirectory();
+      if (externalDir != null) {
+        return externalDir.path;
+      }
+    }
+    // Last resort: use application documents directory
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  } else {
+    // On other platforms, use the documents directory
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  }
+}
+
 class ReportService {
   static Future<String> generateInterventionReport(ServiceIntervention intervention) async {
     try {
@@ -123,21 +163,6 @@ class ReportService {
         if (intervention.hotelAddress != null && intervention.hotelAddress!.isNotEmpty) {
           buffer.writeln('Address: ${intervention.hotelAddress}');
         }
-        // Hotel Costs
-        if (intervention.hotelCostSingle != null ||
-            intervention.hotelCostDouble != null ||
-            intervention.hotelCostSuite != null) {
-          buffer.writeln('Costs per Day:');
-          if (intervention.hotelCostSingle != null) {
-            buffer.writeln('  Single: $currencySymbol${intervention.hotelCostSingle}');
-          }
-          if (intervention.hotelCostDouble != null) {
-            buffer.writeln('  Double: $currencySymbol${intervention.hotelCostDouble}');
-          }
-          if (intervention.hotelCostSuite != null) {
-            buffer.writeln('  Suite: $currencySymbol${intervention.hotelCostSuite}');
-          }
-        }
         // Breakfast and Rating
         if (intervention.hotelBreakfastIncluded == true) {
           buffer.writeln('Breakfast: Included');
@@ -249,10 +274,10 @@ class ReportService {
 
   static Future<File> exportReportAsText(ServiceIntervention intervention) async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final directory = await _getAccessibleDirectory();
       final timestamp = DateFormat('yyyy_MM_dd_HHmmss').format(DateTime.now());
       final fileName = 'Intervention_${intervention.title.replaceAll(' ', '_')}_$timestamp.txt';
-      final file = File('${directory.path}/$fileName');
+      final file = File('$directory/$fileName');
 
       final content = _buildReportContent(intervention);
       await file.writeAsString(content);
@@ -265,10 +290,10 @@ class ReportService {
 
   static Future<File> exportReportAsPdf(ServiceIntervention intervention) async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final directory = await _getAccessibleDirectory();
       final timestamp = DateFormat('yyyy_MM_dd_HHmmss').format(DateTime.now());
       final fileName = 'Intervention_${intervention.title.replaceAll(' ', '_')}_$timestamp.pdf';
-      final file = File('${directory.path}/$fileName');
+      final file = File('$directory/$fileName');
 
       final bytes = await buildReportPdfBytes(intervention);
       await file.writeAsBytes(bytes);
@@ -389,18 +414,6 @@ class ReportService {
                 pw.Text('Hotel: ${intervention.hotelName}'),
                 if (intervention.hotelAddress != null && intervention.hotelAddress!.isNotEmpty)
                   pw.Text('Hotel Address: ${intervention.hotelAddress}'),
-              ],
-              if (intervention.hotelCostSingle != null ||
-                  intervention.hotelCostDouble != null ||
-                  intervention.hotelCostSuite != null) ...[
-                pw.SizedBox(height: 8),
-                pw.Text('Costs per Day:'),
-                if (intervention.hotelCostSingle != null)
-                  pw.Text('  Single: $currencySymbol${intervention.hotelCostSingle}'),
-                if (intervention.hotelCostDouble != null)
-                  pw.Text('  Double: $currencySymbol${intervention.hotelCostDouble}'),
-                if (intervention.hotelCostSuite != null)
-                  pw.Text('  Suite: $currencySymbol${intervention.hotelCostSuite}'),
               ],
               if (intervention.hotelBreakfastIncluded == true)
                 pw.Text('Breakfast: Included'),

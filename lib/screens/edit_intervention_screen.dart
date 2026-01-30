@@ -40,8 +40,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
   late final TextEditingController _hotelRatingController;
   late String _currencyCode;
   late bool _hotelBreakfastIncluded;
+  late DateTime _scheduledDate;
   late DateTime _startDate;
   late DateTime _endDate;
+  late DateTime? _startedAt;
+  late DateTime? _completedAt;
   late List<String> _documents;
   late List<String> _involvedPersons;
   late final TextEditingController _involvedPersonController;
@@ -51,6 +54,8 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
   final Map<String, TextEditingController> _taskDescriptionControllers = {};
   final Map<String, TextEditingController> _taskNotesControllers = {};
   final Map<String, TextEditingController> _taskStopReasonControllers = {};
+  final Map<String, DateTime?> _taskCompletedAt = {};
+  final Map<String, DateTime?> _taskStoppedAt = {};
 
   @override
   void initState() {
@@ -82,8 +87,11 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
         TextEditingController(text: widget.intervention.hotelRating?.toString() ?? '');
     _hotelBreakfastIncluded = widget.intervention.hotelBreakfastIncluded ?? false;
     _currencyCode = widget.intervention.currencyCode;
+    _scheduledDate = widget.intervention.scheduledDate;
     _startDate = widget.intervention.startDate ?? DateTime.now();
     _endDate = widget.intervention.endDate ?? DateTime.now().add(const Duration(days: 1));
+    _startedAt = widget.intervention.startedAt;
+    _completedAt = widget.intervention.completedAt;
     _documents = List.from(widget.intervention.documents);
     _involvedPersons = List.from(widget.intervention.involvedPersons);
     _involvedPersonController = TextEditingController();
@@ -96,6 +104,8 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
           TextEditingController(text: task.notes ?? '');
       _taskStopReasonControllers[task.id] =
         TextEditingController(text: task.stopReason ?? '');
+      _taskCompletedAt[task.id] = task.completedAt;
+      _taskStoppedAt[task.id] = task.stoppedAt;
     }
     _tabController = TabController(length: 5, vsync: this);
   }
@@ -171,6 +181,8 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
         stopReason: task.isStopped
             ? (stopReason.isEmpty ? null : stopReason)
             : null,
+        completedAt: _taskCompletedAt[task.id],
+        stoppedAt: _taskStoppedAt[task.id],
       );
     }).toList();
 
@@ -187,12 +199,15 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
       ),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
+      scheduledDate: _scheduledDate,
       tasks: updatedTasks,
       generalNotes: _generalNotesController.text.trim().isEmpty
           ? null
           : _generalNotesController.text.trim(),
       startDate: _startDate,
       endDate: _endDate,
+      startedAt: _startedAt,
+      completedAt: _completedAt,
       hotelName: _hotelNameController.text.trim().isEmpty
           ? null
           : _hotelNameController.text.trim(),
@@ -359,6 +374,219 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
           maxLines: 3,
         ),
         const SizedBox(height: 24),
+        // Planned Date
+        Text(
+          'Planned Date & Time',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: () async {
+            final DateTime? pickedDate = await showDatePicker(
+              context: context,
+              initialDate: _scheduledDate,
+              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+            );
+            if (pickedDate != null) {
+              final TimeOfDay? pickedTime = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.fromDateTime(_scheduledDate),
+              );
+              if (pickedTime != null) {
+                final newDate = DateTime(
+                  pickedDate.year,
+                  pickedDate.month,
+                  pickedDate.day,
+                  pickedTime.hour,
+                  pickedTime.minute,
+                );
+                final confirmed = await _confirmPastDate(newDate, 'Planned Date');
+                if (confirmed) {
+                  setState(() {
+                    _scheduledDate = newDate;
+                  });
+                }
+              }
+            }
+          },
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Planned Date & Time',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.calendar_today),
+            ),
+            child: Text(
+              '${dateFormat.format(_scheduledDate)} ${DateFormat('HH:mm').format(_scheduledDate)}',
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Intervention Timestamps (for completed interventions)
+        if (widget.intervention.status == InterventionStatus.completed ||
+            widget.intervention.status == InterventionStatus.inProgress)
+          Card(
+            color: Colors.blue[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Intervention Timestamps',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[900],
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (widget.intervention.status == InterventionStatus.inProgress ||
+                      widget.intervention.status == InterventionStatus.completed)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final DateTime? pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: _startedAt ?? DateTime.now(),
+                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (pickedDate != null) {
+                                final TimeOfDay? pickedTime = await showTimePicker(
+                                  context: context,
+                                  initialTime: _startedAt != null
+                                      ? TimeOfDay.fromDateTime(_startedAt!)
+                                      : TimeOfDay.now(),
+                                );
+                                if (pickedTime != null) {
+                                  final newDate = DateTime(
+                                    pickedDate.year,
+                                    pickedDate.month,
+                                    pickedDate.day,
+                                    pickedTime.hour,
+                                    pickedTime.minute,
+                                  );
+                                  setState(() {
+                                    _startedAt = newDate;
+                                  });
+                                }
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Started At',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.play_arrow, color: Colors.blue[700]),
+                                suffixIcon: _startedAt != null
+                                    ? IconButton(
+                                        icon: Icon(Icons.clear, size: 18),
+                                        onPressed: () {
+                                          setState(() {
+                                            _startedAt = null;
+                                          });
+                                        },
+                                        tooltip: 'Clear',
+                                      )
+                                    : null,
+                              ),
+                              child: Text(
+                                _startedAt != null
+                                    ? '${dateFormat.format(_startedAt!)} ${DateFormat('HH:mm').format(_startedAt!)}'
+                                    : 'Tap to set date & time',
+                                style: TextStyle(
+                                  color: _startedAt != null ? Colors.black87 : Colors.grey[600],
+                                  fontWeight: _startedAt != null ? FontWeight.normal : FontWeight.w300,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (widget.intervention.status == InterventionStatus.completed) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final DateTime? pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: _completedAt ?? DateTime.now(),
+                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (pickedDate != null) {
+                                final TimeOfDay? pickedTime = await showTimePicker(
+                                  context: context,
+                                  initialTime: _completedAt != null
+                                      ? TimeOfDay.fromDateTime(_completedAt!)
+                                      : TimeOfDay.now(),
+                                );
+                                if (pickedTime != null) {
+                                  final newDate = DateTime(
+                                    pickedDate.year,
+                                    pickedDate.month,
+                                    pickedDate.day,
+                                    pickedTime.hour,
+                                    pickedTime.minute,
+                                  );
+                                  setState(() {
+                                    _completedAt = newDate;
+                                  });
+                                }
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Completed At',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.check_circle, color: Colors.green[700]),
+                                suffixIcon: _completedAt != null
+                                    ? IconButton(
+                                        icon: Icon(Icons.clear, size: 18),
+                                        onPressed: () {
+                                          setState(() {
+                                            _completedAt = null;
+                                          });
+                                        },
+                                        tooltip: 'Clear',
+                                      )
+                                    : null,
+                              ),
+                              child: Text(
+                                _completedAt != null
+                                    ? '${dateFormat.format(_completedAt!)} ${DateFormat('HH:mm').format(_completedAt!)}'
+                                    : 'Tap to set date & time',
+                                style: TextStyle(
+                                  color: _completedAt != null ? Colors.black87 : Colors.grey[600],
+                                  fontWeight: _completedAt != null ? FontWeight.normal : FontWeight.w300,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (widget.intervention.status == InterventionStatus.completed ||
+            widget.intervention.status == InterventionStatus.inProgress)
+          const SizedBox(height: 24),
         // Travel Dates
         Text(
           'Travel Dates',
@@ -380,9 +608,12 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    setState(() {
-                      _startDate = picked;
-                    });
+                    final confirmed = await _confirmPastDate(picked, 'From Date');
+                    if (confirmed) {
+                      setState(() {
+                        _startDate = picked;
+                      });
+                    }
                   }
                 },
                 child: InputDecorator(
@@ -406,9 +637,12 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
-                    setState(() {
-                      _endDate = picked;
-                    });
+                    final confirmed = await _confirmPastDate(picked, 'To Date');
+                    if (confirmed) {
+                      setState(() {
+                        _endDate = picked;
+                      });
+                    }
                   }
                 },
                 child: InputDecorator(
@@ -667,6 +901,36 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
     }
   }
 
+  Future<bool> _confirmPastDate(DateTime date, String dateLabel) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDay = DateTime(date.year, date.month, date.day);
+    
+    if (selectedDay.isBefore(today)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Past Date Selected'),
+          content: Text(
+            'This date ($dateLabel) is in the past. Are you sure you want to use this date?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes, Use This Date'),
+            ),
+          ],
+        ),
+      );
+      return confirmed ?? false;
+    }
+    return true;
+  }
+
   Widget _buildNotesTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -762,6 +1026,7 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
   }
 
   Widget _buildTasksTab() {
+    final dateFormat = DateFormat('dd/MM/yyyy');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -880,14 +1145,21 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                             onChanged: (value) {
                               if (value == null) return;
                               setState(() {
+                                // Preserve manually edited timestamp if it exists, otherwise set to now
+                                final completedAt = value
+                                    ? (_taskCompletedAt[task.id] ?? DateTime.now())
+                                    : null;
+                                _taskCompletedAt[task.id] = completedAt;
                                 _tasks[index] = task.copyWith(
                                   isCompleted: value,
-                                  completedAt:
-                                      value ? DateTime.now() : null,
+                                  completedAt: completedAt,
                                   isStopped: value ? false : task.isStopped,
                                   stopReason: value ? null : task.stopReason,
                                   stoppedAt: value ? null : task.stoppedAt,
                                 );
+                                if (value) {
+                                  _taskStoppedAt[task.id] = null;
+                                }
                               });
                             },
                           ),
@@ -900,14 +1172,21 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                               setState(() {
                                 if (!value) {
                                   _taskStopReasonControllers[task.id]!.clear();
+                                  _taskStoppedAt[task.id] = null;
+                                } else {
+                                  // Preserve manually edited timestamp if it exists, otherwise set to now
+                                  _taskStoppedAt[task.id] = _taskStoppedAt[task.id] ?? DateTime.now();
                                 }
                                 _tasks[index] = task.copyWith(
                                   isStopped: value,
-                                  stoppedAt: value ? DateTime.now() : null,
+                                  stoppedAt: _taskStoppedAt[task.id],
                                   isCompleted: value ? false : task.isCompleted,
                                   completedAt: value ? null : task.completedAt,
                                   stopReason: value ? task.stopReason : null,
                                 );
+                                if (value) {
+                                  _taskCompletedAt[task.id] = null;
+                                }
                               });
                             },
                           ),
@@ -946,6 +1225,157 @@ class _EditInterventionScreenState extends State<EditInterventionScreen>
                             ),
                             maxLines: 2,
                           ),
+                          // Task Timestamps
+                          if (task.isCompleted || task.isStopped) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue[200]!),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.access_time, color: Colors.blue[700], size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Task Timestamps',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue[900],
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (task.isCompleted)
+                                    InkWell(
+                                      onTap: () async {
+                                        final DateTime? pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: _taskCompletedAt[task.id] ?? DateTime.now(),
+                                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        );
+                                        if (pickedDate != null) {
+                                          final TimeOfDay? pickedTime = await showTimePicker(
+                                            context: context,
+                                            initialTime: _taskCompletedAt[task.id] != null
+                                                ? TimeOfDay.fromDateTime(_taskCompletedAt[task.id]!)
+                                                : TimeOfDay.now(),
+                                          );
+                                          if (pickedTime != null) {
+                                            final newDate = DateTime(
+                                              pickedDate.year,
+                                              pickedDate.month,
+                                              pickedDate.day,
+                                              pickedTime.hour,
+                                              pickedTime.minute,
+                                            );
+                                            setState(() {
+                                              _taskCompletedAt[task.id] = newDate;
+                                            });
+                                          }
+                                        }
+                                      },
+                                      child: InputDecorator(
+                                        decoration: InputDecoration(
+                                          labelText: 'Completed At',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.check_circle, size: 18, color: Colors.green[700]),
+                                          suffixIcon: _taskCompletedAt[task.id] != null
+                                              ? IconButton(
+                                                  icon: Icon(Icons.clear, size: 16),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _taskCompletedAt[task.id] = null;
+                                                    });
+                                                  },
+                                                  tooltip: 'Clear',
+                                                )
+                                              : null,
+                                        ),
+                                        child: Text(
+                                          _taskCompletedAt[task.id] != null
+                                              ? '${dateFormat.format(_taskCompletedAt[task.id]!)} ${DateFormat('HH:mm').format(_taskCompletedAt[task.id]!)}'
+                                              : 'Tap to set date & time',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: _taskCompletedAt[task.id] != null ? Colors.black87 : Colors.grey[600],
+                                            fontWeight: _taskCompletedAt[task.id] != null ? FontWeight.normal : FontWeight.w300,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (task.isStopped) ...[
+                                    if (task.isCompleted) const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: () async {
+                                        final DateTime? pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: _taskStoppedAt[task.id] ?? DateTime.now(),
+                                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        );
+                                        if (pickedDate != null) {
+                                          final TimeOfDay? pickedTime = await showTimePicker(
+                                            context: context,
+                                            initialTime: _taskStoppedAt[task.id] != null
+                                                ? TimeOfDay.fromDateTime(_taskStoppedAt[task.id]!)
+                                                : TimeOfDay.now(),
+                                          );
+                                          if (pickedTime != null) {
+                                            final newDate = DateTime(
+                                              pickedDate.year,
+                                              pickedDate.month,
+                                              pickedDate.day,
+                                              pickedTime.hour,
+                                              pickedTime.minute,
+                                            );
+                                            setState(() {
+                                              _taskStoppedAt[task.id] = newDate;
+                                            });
+                                          }
+                                        }
+                                      },
+                                      child: InputDecorator(
+                                        decoration: InputDecoration(
+                                          labelText: 'Stopped At',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.block, size: 18, color: Colors.red[700]),
+                                          suffixIcon: _taskStoppedAt[task.id] != null
+                                              ? IconButton(
+                                                  icon: Icon(Icons.clear, size: 16),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _taskStoppedAt[task.id] = null;
+                                                    });
+                                                  },
+                                                  tooltip: 'Clear',
+                                                )
+                                              : null,
+                                        ),
+                                        child: Text(
+                                          _taskStoppedAt[task.id] != null
+                                              ? '${dateFormat.format(_taskStoppedAt[task.id]!)} ${DateFormat('HH:mm').format(_taskStoppedAt[task.id]!)}'
+                                              : 'Tap to set date & time',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: _taskStoppedAt[task.id] != null ? Colors.black87 : Colors.grey[600],
+                                            fontWeight: _taskStoppedAt[task.id] != null ? FontWeight.normal : FontWeight.w300,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
