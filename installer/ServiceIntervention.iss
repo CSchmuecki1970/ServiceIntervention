@@ -1,6 +1,6 @@
 ; Inno Setup Script for Service Intervention
 #define MyAppName "Service Intervention"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Service Intervention"
 #define MyAppExeName "k2traveliq.exe"
 

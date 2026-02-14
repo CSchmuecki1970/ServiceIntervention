@@ -28,17 +28,35 @@ class StorageService {
       await SettingsService.init();
 
       try {
-        interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
+        interventionsBox =
+            await Hive.openBox<ServiceIntervention>('interventions');
       } catch (e) {
         // If there's an error opening the box (likely due to schema changes), delete it and recreate
-        await Hive.deleteBoxFromDisk('interventions');
-        interventionsBox = await Hive.openBox<ServiceIntervention>('interventions');
+        try {
+          await Hive.close(); // Close all boxes first
+          await Future.delayed(const Duration(
+              milliseconds: 500)); // Wait for file locks to release
+          await Hive.deleteBoxFromDisk('interventions');
+        } catch (deleteError) {
+          // If we still can't delete, just try to open a new one
+          print(
+              'Warning: Could not delete corrupted interventions box: $deleteError');
+        }
+        interventionsBox =
+            await Hive.openBox<ServiceIntervention>('interventions');
       }
 
       try {
         customersBox = await Hive.openBox<Customer>('customers');
       } catch (e) {
-        await Hive.deleteBoxFromDisk('customers');
+        try {
+          await Hive.close();
+          await Future.delayed(const Duration(milliseconds: 500));
+          await Hive.deleteBoxFromDisk('customers');
+        } catch (deleteError) {
+          print(
+              'Warning: Could not delete corrupted customers box: $deleteError');
+        }
         customersBox = await Hive.openBox<Customer>('customers');
       }
 
@@ -186,16 +204,45 @@ class StorageService {
       }
 
       // Import customers first
-      final customersList = (data['customers'] as List)
-          .map((c) => Customer.fromJson(c as Map<String, dynamic>))
-          .toList();
-      await saveCustomersBatch(customersList);
+      final customersList = <Customer>[];
+      for (final c in (data['customers'] as List? ?? [])) {
+        try {
+          customersList.add(Customer.fromJson(c as Map<String, dynamic>));
+        } catch (e) {
+          print('WARNING: Failed to parse customer: $e');
+          // Continue importing other records instead of failing entirely
+        }
+      }
+      if (customersList.isNotEmpty) {
+        await saveCustomersBatch(customersList);
+      }
 
       // Import interventions
-      final interventionsList = (data['interventions'] as List)
-          .map((i) => ServiceIntervention.fromJson(i as Map<String, dynamic>))
-          .toList();
-      await saveInterventionsBatch(interventionsList);
+      final interventionsList = <ServiceIntervention>[];
+      final duplicateIds = <String>{};
+      for (final i in (data['interventions'] as List? ?? [])) {
+        try {
+          final intervention =
+              ServiceIntervention.fromJson(i as Map<String, dynamic>);
+          if (duplicateIds.contains(intervention.id)) {
+            print(
+                'WARNING: Skipping duplicate intervention ID: ${intervention.id}');
+            continue; // Skip duplicates
+          }
+          duplicateIds.add(intervention.id);
+          interventionsList.add(intervention);
+        } catch (e) {
+          print('WARNING: Failed to parse intervention: $e');
+          // Continue importing other records instead of failing entirely
+        }
+      }
+      if (interventionsList.isNotEmpty) {
+        await saveInterventionsBatch(interventionsList);
+      }
+
+      if (interventionsList.isEmpty && customersList.isEmpty) {
+        throw StorageException('No valid data found in import file');
+      }
 
       lastSync = DateTime.now();
     } catch (e) {
@@ -218,7 +265,8 @@ class StorageService {
   }
 
   // Search interventions by customer
-  static List<ServiceIntervention> getInterventionsByCustomer(String customerId) {
+  static List<ServiceIntervention> getInterventionsByCustomer(
+      String customerId) {
     try {
       return getAllInterventions()
           .where((i) => i.customer.id == customerId)
@@ -255,4 +303,3 @@ class StorageService {
     }
   }
 }
-

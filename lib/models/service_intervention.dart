@@ -21,7 +21,7 @@ class ServiceIntervention extends HiveObject {
   @HiveField(4)
   final DateTime scheduledDate;
 
-  @HiveField(5)
+  @HiveField(5, defaultValue: const <Task>[])
   final List<Task> tasks;
 
   @HiveField(6)
@@ -51,7 +51,7 @@ class ServiceIntervention extends HiveObject {
   @HiveField(14)
   final String? hotelAddress;
 
-  @HiveField(15)
+  @HiveField(15, defaultValue: const <String>[])
   final List<String> documents; // File paths to pictures and invoices
 
   @HiveField(16)
@@ -69,10 +69,11 @@ class ServiceIntervention extends HiveObject {
   @HiveField(20)
   final double? hotelRating;
 
-  @HiveField(21)
-  final List<String> involvedPersons; // Names of people involved in the intervention
+  @HiveField(21, defaultValue: const <String>[])
+  final List<String>
+      involvedPersons; // Names of people involved in the intervention
 
-  @HiveField(22)
+  @HiveField(22, defaultValue: 'EUR')
   final String currencyCode;
 
   ServiceIntervention({
@@ -146,7 +147,8 @@ class ServiceIntervention extends HiveObject {
       hotelCostSingle: hotelCostSingle ?? this.hotelCostSingle,
       hotelCostDouble: hotelCostDouble ?? this.hotelCostDouble,
       hotelCostSuite: hotelCostSuite ?? this.hotelCostSuite,
-      hotelBreakfastIncluded: hotelBreakfastIncluded ?? this.hotelBreakfastIncluded,
+      hotelBreakfastIncluded:
+          hotelBreakfastIncluded ?? this.hotelBreakfastIncluded,
       hotelRating: hotelRating ?? this.hotelRating,
       involvedPersons: involvedPersons ?? this.involvedPersons,
       currencyCode: currencyCode ?? this.currencyCode,
@@ -201,8 +203,8 @@ class ServiceIntervention extends HiveObject {
       tasks: (json['tasks'] as List<dynamic>)
           .map((t) => Task.fromJson(t as Map<String, dynamic>))
           .toList(),
-      status: InterventionStatus.values
-          .firstWhere((e) => e.name == json['status']),
+      status:
+          InterventionStatus.values.firstWhere((e) => e.name == json['status']),
       createdAt: DateTime.parse(json['createdAt'] as String),
       startedAt: json['startedAt'] != null
           ? DateTime.parse(json['startedAt'] as String)
@@ -220,15 +222,18 @@ class ServiceIntervention extends HiveObject {
       hotelName: json['hotelName'] as String?,
       hotelAddress: json['hotelAddress'] as String?,
       documents: (json['documents'] as List<dynamic>?)
-          ?.map((d) => d as String)
-          .toList() ?? [],      hotelCostSingle: json['hotelCostSingle'] as double?,
+              ?.map((d) => d as String)
+              .toList() ??
+          [],
+      hotelCostSingle: json['hotelCostSingle'] as double?,
       hotelCostDouble: json['hotelCostDouble'] as double?,
       hotelCostSuite: json['hotelCostSuite'] as double?,
       hotelBreakfastIncluded: json['hotelBreakfastIncluded'] as bool?,
       hotelRating: json['hotelRating'] as double?,
       involvedPersons: (json['involvedPersons'] as List<dynamic>?)
-          ?.map((p) => p as String)
-          .toList() ?? [],
+              ?.map((p) => p as String)
+              .toList() ??
+          [],
       currencyCode: json['currencyCode'] as String? ?? 'EUR',
     );
   }

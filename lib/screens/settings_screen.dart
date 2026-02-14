@@ -12,6 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import '../screens/view_archive_screen.dart';
 import 'create_intervention_screen.dart';
 import '../utils/currency_utils.dart';
+import 'about_legal_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -92,9 +93,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, settingsProvider, child) {
               if (!_signatureLoaded) {
                 _signatureNameController.text = settingsProvider.signatureName;
-                _signatureTitleController.text = settingsProvider.signatureTitle;
-                _signatureCompanyController.text = settingsProvider.signatureCompany;
-                _signatureNotesController.text = settingsProvider.signatureNotes;
+                _signatureTitleController.text =
+                    settingsProvider.signatureTitle;
+                _signatureCompanyController.text =
+                    settingsProvider.signatureCompany;
+                _signatureNotesController.text =
+                    settingsProvider.signatureNotes;
                 _signatureLoaded = true;
               }
 
@@ -232,7 +236,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ViewArchiveScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const ViewArchiveScreen()),
                     );
                   },
                 ),
@@ -246,8 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Consumer<InterventionProvider>(
             builder: (context, provider, child) {
               final backupInfo = provider.getBackupInfo();
-              final interventionsCount =
-                  backupInfo['interventionsCount'] ?? 0;
+              final interventionsCount = backupInfo['interventionsCount'] ?? 0;
               final customersCount = backupInfo['customersCount'] ?? 0;
               final lastSync = backupInfo['lastSync'] as String?;
 
@@ -279,6 +283,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 24),
+
+          // About & Legal Section
+          _buildSectionTitle(context, 'Information'),
+          Card(
+            child: _buildTile(
+              context,
+              icon: Icons.info_outline,
+              title: 'About & Legal',
+              subtitle: 'View copyright, licenses, and terms',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AboutLegalScreen(),
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -396,23 +420,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showExportDialog(BuildContext context) {
     try {
       final provider = context.read<InterventionProvider>();
-      final jsonData = provider.exportData();
+      // Capture export data once to ensure consistency
+      final jsonString = provider.exportData();
+      final data = jsonDecode(jsonString);
+      final interventionCount = (data['interventions'] as List?)?.length ?? 0;
+      final customerCount = (data['customers'] as List?)?.length ?? 0;
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Export Data'),
-          content: const Text('Save your data to a JSON file in the Downloads folder? You can access this file through your device\'s file manager.'),
+          content: Text(
+              'Save your data to a JSON file in the Downloads folder?\n\n'
+              'Interventions: $interventionCount\n'
+              'Customers: $customerCount\n\n'
+              'You can access this file through your device\'s file manager.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(context);
                 try {
-                  final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-                  final filename = 'service_intervention_export_$timestamp.json';
-                  // Use StorageService.exportToJson() for consistent format
-                  final data = jsonDecode(StorageService.exportToJson());
-                  final path = await ExportService.exportJsonToFile(filename, data);
+                  final timestamp =
+                      DateTime.now().toIso8601String().replaceAll(':', '-');
+                  final filename =
+                      'service_intervention_export_$timestamp.json';
+                  // Use the already-captured data to ensure consistency
+                  final path =
+                      await ExportService.exportJsonToFile(filename, data);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Exported to $path')),
@@ -421,7 +458,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+                      SnackBar(
+                          content: Text('Export failed: $e'),
+                          backgroundColor: Colors.red),
                     );
                   }
                 }
@@ -448,7 +487,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('Import Data'),
         content: const Text('Select a JSON file to import your exported data.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
@@ -460,7 +501,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
 
                 if (result == null || result.files.isEmpty) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No file selected')));
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('No file selected')));
                   return;
                 }
 
@@ -474,20 +517,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final fileObj = File(file.path!);
                   text = await fileObj.readAsString();
                 } else {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to read file')));
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Unable to read file')));
                   return;
                 }
 
                 final provider = context.read<InterventionProvider>();
+
+                // Parse import data first to show preview
+                final importedData = jsonDecode(text) as Map<String, dynamic>;
+                final interventionCount =
+                    (importedData['interventions'] as List?)?.length ?? 0;
+                final customerCount =
+                    (importedData['customers'] as List?)?.length ?? 0;
+
+                if (interventionCount == 0 && customerCount == 0) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Import file contains no data'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                // Show confirmation with import summary
+                if (mounted) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Confirm Import'),
+                      content: Text('Ready to import:\n'
+                          '• $interventionCount interventions\n'
+                          '• $customerCount customers\n\n'
+                          'This will merge with existing data.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Import'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed != true) return;
+                }
+
                 await provider.importData(text);
 
-                // Check if data was actually imported
-                final interventionCount = provider.interventions.length;
+                // Check how many interventions were actually imported
+                final actualInterventions = provider.interventions.length;
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Data imported successfully! $interventionCount interventions loaded.', style: const TextStyle(color: Colors.white)),
+                      content: Text(
+                          'Import complete! $actualInterventions total interventions in database.',
+                          style: const TextStyle(color: Colors.white)),
                       backgroundColor: Colors.green,
                       duration: const Duration(seconds: 3),
                     ),
