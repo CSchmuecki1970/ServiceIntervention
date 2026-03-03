@@ -22,7 +22,8 @@ class ExportService {
 
   /// Writes [content] into a file named [filename] in the Downloads directory
   /// (public storage on Android) and returns the absolute path to the created file.
-  static Future<String> exportTextToFile(String filename, String content) async {
+  static Future<String> exportTextToFile(
+      String filename, String content) async {
     final dir = await _getDownloadsPath();
     final file = File('$dir/$filename');
     await file.writeAsString(content);
@@ -31,7 +32,8 @@ class ExportService {
 
   /// Writes binary [bytes] into a file named [filename] in the Downloads directory
   /// (public storage on Android) and returns the absolute path to the created file.
-  static Future<String> exportBytesToFile(String filename, List<int> bytes) async {
+  static Future<String> exportBytesToFile(
+      String filename, List<int> bytes) async {
     final dir = await _getDownloadsPath();
     final file = File('$dir/$filename');
     await file.writeAsBytes(bytes);
@@ -53,5 +55,33 @@ class ExportService {
     if (file == null) throw Exception('No file selected');
     final text = await file.readAsString();
     return jsonDecode(text);
+  }
+
+  /// Finds the most recently created JSON export file in the Downloads directory.
+  /// Returns the File object or throws if no export file is found.
+  static Future<File> getLatestExportFile() async {
+    final dir = Directory(await _getDownloadsPath());
+    if (!await dir.exists()) {
+      throw Exception('Downloads directory does not exist');
+    }
+
+    final files = dir
+        .listSync()
+        .where((entity) =>
+            entity is File &&
+            entity.path.contains('service_intervention_export_') &&
+            entity.path.endsWith('.json'))
+        .cast<File>()
+        .toList();
+
+    if (files.isEmpty) {
+      throw Exception('No export files found. Please export data first.');
+    }
+
+    // Sort by modification time (most recent first)
+    files
+        .sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+
+    return files.first;
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:share_plus/share_plus.dart';
 import '../providers/intervention_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
@@ -218,6 +219,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Export Data',
                   subtitle: 'Export all plannings to JSON file',
                   onTap: () => _showExportDialog(context),
+                ),
+                const Divider(height: 1),
+                _buildTile(
+                  context,
+                  icon: Icons.bluetooth,
+                  title: 'Share via Bluetooth',
+                  subtitle: 'Send latest export to PC via Bluetooth',
+                  onTap: () => _shareViaBluetoothDialog(context),
                 ),
                 const Divider(height: 1),
                 _buildTile(
@@ -501,9 +510,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
 
                 if (result == null || result.files.isEmpty) {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('No file selected')));
+                  }
                   return;
                 }
 
@@ -517,9 +527,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final fileObj = File(file.path!);
                   text = await fileObj.readAsString();
                 } else {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Unable to read file')));
+                  }
                   return;
                 }
 
@@ -598,6 +609,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
             child: const Text('Choose File'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _shareViaBluetoothDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Share via Bluetooth'),
+        content: const Text(
+          'Send your latest export to a Bluetooth device?\n\n'
+          'Your export file will be shared using the system share menu, where you can select your PC.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                // Get the latest export file
+                final exportFile = await ExportService.getLatestExportFile();
+
+                // Share the file using the system share dialog
+                // This allows the user to select Bluetooth from the available options
+                await Share.shareXFiles(
+                  [XFile(exportFile.path)],
+                  text: 'Latest Service Intervention Export',
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Bluetooth share failed: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Share'),
           ),
         ],
       ),
