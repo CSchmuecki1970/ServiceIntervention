@@ -21,7 +21,7 @@ class ServiceIntervention extends HiveObject {
   @HiveField(4)
   final DateTime scheduledDate;
 
-  @HiveField(5, defaultValue: const <Task>[])
+  @HiveField(5, defaultValue: <Task>[])
   final List<Task> tasks;
 
   @HiveField(6)
@@ -51,7 +51,7 @@ class ServiceIntervention extends HiveObject {
   @HiveField(14)
   final String? hotelAddress;
 
-  @HiveField(15, defaultValue: const <String>[])
+  @HiveField(15, defaultValue: <String>[])
   final List<String> documents; // File paths to pictures and invoices
 
   @HiveField(16)
@@ -69,7 +69,7 @@ class ServiceIntervention extends HiveObject {
   @HiveField(20)
   final double? hotelRating;
 
-  @HiveField(21, defaultValue: const <String>[])
+  @HiveField(21, defaultValue: <String>[])
   final List<String>
       involvedPersons; // Names of people involved in the intervention
 
